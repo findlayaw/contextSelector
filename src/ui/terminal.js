@@ -580,50 +580,108 @@ async function start(options) {
 }
 
 /**
+ * Generate tree branch characters for a node
+ * @param {Object} node - The current node
+ * @returns {string} - Tree branch characters
+ */
+function getTreeBranches(node) {
+  try {
+    if (!node) return '';
+
+    // Get the path components to determine the node's level
+    // Use backslashes for Windows paths
+    const pathComponents = node.path.split(/[\\\/]/).filter(Boolean);
+    const level = pathComponents.length;
+
+    if (level === 0) return ''; // Root node has no branches
+
+    // Initialize the branch string
+    let branches = '';
+
+    // Simple approach: just add indentation based on level
+    if (level > 1) {
+      // For each level except the last one, add a branch character
+      for (let i = 1; i < level; i++) {
+        branches += '│ ';
+      }
+
+      // Replace the last vertical line with a corner
+      if (branches.length >= 2) {
+        branches = branches.substring(0, branches.length - 2) + '└─';
+      }
+    }
+
+    return branches;
+  } catch (error) {
+    console.error('Error in getTreeBranches:', error);
+    return '';
+  }
+}
+
+/**
  * Render the directory tree in the tree box
  * @param {Object} box - Blessed box to render in
  * @param {Object} tree - Directory tree to render
  */
 function renderTree(box, tree) {
-  if (!tree) {
-    return;
-  }
-
-  // Reset the flattened tree
-  flattenedTree = [];
-
-  // Build the flattened tree
-  flattenTree(tree, true);
-
-  // Create the list items
-  const items = flattenedTree.map(node => {
-    const level = node.path.split('/').length - 1;
-    const indent = '  '.repeat(level);
-    const isExpanded = node === tree || isNodeExpanded(node);
-    const prefix = node.type === 'directory' ? (isExpanded ? '▼ ' : '▶ ') : '  ';
-    // Use a different approach for coloring
-    const selected = isFileSelected(node) ? '✓ ' : '  ';
-    // Use relativePath instead of just name
-    const displayPath = node.relativePath + (node.type === 'directory' ? '\\' : '');
-
-    // If the node is selected, wrap the checkmark with color tags
-    if (isFileSelected(node)) {
-      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${displayPath}`;
-    } else {
-      return `${indent}${prefix}${selected}${displayPath}`;
+  try {
+    if (!tree) {
+      return;
     }
-  });
 
-  // Set the items in the list
-  box.setItems(items);
+    // Reset the flattened tree
+    flattenedTree = [];
 
-  // Preserve the current selection if possible
-  if (box.selected >= items.length) {
-    box.select(0);
+    // Build the flattened tree
+    flattenTree(tree, true);
+
+    // Create the list items
+    const items = flattenedTree.map((node) => {
+      try {
+        const isExpanded = node === tree || isNodeExpanded(node);
+        const dirPrefix = node.type === 'directory' ? (isExpanded ? '▼ ' : '▶ ') : '  ';
+        const selected = isFileSelected(node) ? '✓ ' : '  ';
+
+        // Get tree branch characters
+        const branches = getTreeBranches(node);
+
+        // Use relativePath instead of just name
+        const displayPath = node.relativePath + (node.type === 'directory' ? '\\' : '');
+
+        // Format the path with the rightmost part in bold
+        let formattedPath = displayPath;
+        try {
+          formattedPath = formatPathWithBoldRightmost(displayPath);
+        } catch (formatError) {
+          console.error('Error formatting path:', formatError);
+        }
+
+        // If the node is selected, wrap the checkmark with color tags
+        if (isFileSelected(node)) {
+          return `${branches}${dirPrefix}{green-fg}${selected}{/green-fg}${formattedPath}`;
+        } else {
+          return `${branches}${dirPrefix}${selected}${formattedPath}`;
+        }
+      } catch (nodeError) {
+        console.error('Error processing node:', nodeError);
+        return `Error: ${node ? node.relativePath || 'unknown' : 'null'}`;
+      }
+    });
+
+    // Set the items in the list
+    box.setItems(items);
+
+    // Preserve the current selection if possible
+    if (box.selected >= items.length) {
+      box.select(0);
+    }
+
+    // Scroll to the top
+    box.scrollTo(0);
+  } catch (error) {
+    console.error('Error in renderTree:', error);
+    box.setItems(['Error rendering tree: ' + error.message]);
   }
-
-  // Scroll to the top
-  box.scrollTo(0);
 }
 
 // Removed renderNode function as it's no longer needed with the list-based approach
@@ -951,45 +1009,93 @@ function displaySearchResults(box, results, preserveSelection = false) {
   const sortedPaths = Object.keys(groupedResults).sort((a, b) => a.localeCompare(b));
 
   // Build the display items
-  sortedPaths.forEach(relativePath => {
-    // Find the directory node if it exists
-    const dirNode = results.find(node =>
-      node.type === 'directory' && node.relativePath === relativePath
-    );
+  try {
+    sortedPaths.forEach((relativePath) => {
+      try {
+        // Find the directory node if it exists
+        const dirNode = results.find(node =>
+          node.type === 'directory' && node.relativePath === relativePath
+        );
 
-    if (dirNode) {
-      // Add the directory entry
-      const prefix = '▶ ';
-      const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
-      const displayPath = relativePath + '\\';
+        // Split the path to determine the directory structure
+        const dirParts = relativePath.split('\\');
 
-      // If the directory is selected, wrap the checkmark with color tags
-      if (isFileSelected(dirNode)) {
-        items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
-      } else {
-        items.push(`${prefix}${selected}${displayPath}`);
-      }
-    }
+        // Generate simple tree branches for directories based on depth
+        let dirBranches = '';
+        for (let i = 0; i < dirParts.length - 1; i++) {
+          dirBranches += '│ ';
+        }
 
-    // Add the files in this directory
-    const files = groupedResults[relativePath];
-    if (files && files.length > 0) {
-      files.forEach(fileNode => {
-        if (fileNode.type === 'file') {
-          const prefix = '  ';
-          const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
-          const displayPath = fileNode.relativePath;
+        // Replace the last vertical line with a corner if needed
+        if (dirBranches.length >= 2) {
+          dirBranches = dirBranches.substring(0, dirBranches.length - 2) + '└─';
+        }
 
-          // If the file is selected, wrap the checkmark with color tags
-          if (isFileSelected(fileNode)) {
-            items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
+        if (dirNode) {
+          // Add the directory entry
+          const dirPrefix = '▶ ';
+          const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
+          const displayPath = relativePath + '\\';
+
+          // Format the path with the rightmost part in bold
+          let formattedPath = displayPath;
+          try {
+            formattedPath = formatPathWithBoldRightmost(displayPath);
+          } catch (formatError) {
+            console.error('Error formatting path:', formatError);
+          }
+
+          // If the directory is selected, wrap the checkmark with color tags
+          if (isFileSelected(dirNode)) {
+            items.push(`${dirBranches}${dirPrefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
           } else {
-            items.push(`${prefix}${selected}${displayPath}`);
+            items.push(`${dirBranches}${dirPrefix}${selected}${formattedPath}`);
           }
         }
-      });
-    }
-  });
+
+        // Add the files in this directory
+        const files = groupedResults[relativePath];
+        if (files && files.length > 0) {
+          files.forEach((fileNode, fileIndex) => {
+            try {
+              if (fileNode.type === 'file') {
+                // Generate file branch - use └─ for last file, ├─ for others
+                const isLastFile = fileIndex === files.length - 1;
+                const fileBranch = dirBranches + (isLastFile ? '└─' : '├─');
+                const filePrefix = '  ';
+                const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
+                const displayPath = fileNode.relativePath;
+
+                // Format the path with the rightmost part in bold
+                let formattedPath = displayPath;
+                try {
+                  formattedPath = formatPathWithBoldRightmost(displayPath);
+                } catch (formatError) {
+                  console.error('Error formatting path:', formatError);
+                }
+
+                // If the file is selected, wrap the checkmark with color tags
+                if (isFileSelected(fileNode)) {
+                  items.push(`${fileBranch}${filePrefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
+                } else {
+                  items.push(`${fileBranch}${filePrefix}${selected}${formattedPath}`);
+                }
+              }
+            } catch (fileError) {
+              console.error('Error processing file:', fileError);
+              items.push(`Error: ${fileNode ? fileNode.relativePath || 'unknown file' : 'null file'}`);
+            }
+          });
+        }
+      } catch (dirError) {
+        console.error('Error processing directory:', dirError);
+        items.push(`Error: ${relativePath || 'unknown directory'}`);
+      }
+    });
+  } catch (error) {
+    console.error('Error building display items:', error);
+    items.push('Error building display items: ' + error.message);
+  }
 
   // Set the items in the list
   box.setItems(items);
@@ -1056,6 +1162,38 @@ function showConfirmationDialog(box, message, callback) {
 
   // Add the key event handler
   box.screen.key(['y', 'n'], onKey);
+}
+
+/**
+ * Format a path with the rightmost part in bold
+ * @param {string} displayPath - Path to format
+ * @returns {string} - Formatted path with rightmost part in bold
+ */
+function formatPathWithBoldRightmost(displayPath) {
+  if (!displayPath) return '';
+
+  // For directory paths ending with '\', we need to handle them specially
+  const isDirectory = displayPath.endsWith('\\');
+
+  // Remove trailing backslash for processing if it's a directory
+  const processPath = isDirectory ? displayPath.slice(0, -1) : displayPath;
+
+  // Find the last backslash to determine the rightmost part
+  const lastBackslashIndex = processPath.lastIndexOf('\\');
+
+  if (lastBackslashIndex === -1) {
+    // No backslash found, the entire path is the rightmost part
+    return `{bold}${displayPath}{/bold}`;
+  } else {
+    // Split the path into prefix and rightmost part
+    const prefix = processPath.substring(0, lastBackslashIndex + 1);
+    const rightmost = processPath.substring(lastBackslashIndex + 1);
+
+    // Add the trailing backslash to the rightmost part if it's a directory
+    const formattedRightmost = isDirectory ? `{bold}${rightmost}\\{/bold}` : `{bold}${rightmost}{/bold}`;
+
+    return prefix + formattedRightmost;
+  }
 }
 
 module.exports = { start };
