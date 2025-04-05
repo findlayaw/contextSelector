@@ -301,48 +301,109 @@ async function start(options) {
           const itemContent = selectedItem.content;
 
           // Check if this is a directory (has the directory prefix '▶ ')
-          const isDirectory = itemContent.startsWith('▶ ');
+          const isDirectory = itemContent.includes('▶ ');
+          const isFile = !isDirectory;
 
-          // Extract the path directly from the content
-          // Remove the prefix and any selection indicator
-          const itemPath = itemContent.replace(/^\s*(?:▶|▼)\s*(?:✓\s*)?/, '').replace(/\\$/, '');
-          if (!itemPath) return;
+          // Extract the filename or directory name from the content
+          // This is a more reliable approach than trying to extract the full path
+          let fileName = '';
+          let dirName = '';
+
+          if (isFile) {
+            // For files, extract the filename (last part of the path)
+            // First remove all formatting tags
+            const contentWithoutTags = itemContent.replace(/\{[^}]+\}/g, '');
+            // Split by backslash and get the last part
+            const parts = contentWithoutTags.split('\\');
+            fileName = parts[parts.length - 1].trim();
+            // Remove any tree characters and selection indicators
+            fileName = fileName.replace(/[│├└]─?\s*/g, '').replace(/^\s*(?:✓\s*)?/, '');
+          } else {
+            // For directories, extract the directory name with trailing backslash
+            // First remove all formatting tags
+            const contentWithoutTags = itemContent.replace(/\{[^}]+\}/g, '');
+            // Extract the part after the directory prefix
+            const match = contentWithoutTags.match(/▶\s*(?:✓\s*)?([^\n]+)/);
+            if (match && match[1]) {
+              dirName = match[1].trim();
+              // Remove any tree characters
+              dirName = dirName.replace(/[│├└]─?\s*/g, '');
+            }
+          }
 
           // Find the corresponding node in our search results
-          const selectedNode = searchResults.find(node => node.relativePath === itemPath);
+          let selectedNode = null;
 
-          // If we couldn't find an exact match, try to find by partial path
-          if (!selectedNode) {
-            // For files, the path might be in a different format
-            const possibleNodes = searchResults.filter(node =>
-              itemContent.includes(node.name) &&
-              (isDirectory ? node.type === 'directory' : node.type === 'file')
+          if (isFile && fileName) {
+            // For files, find all nodes that end with this filename
+            const matchingNodes = searchResults.filter(node =>
+              node.type === 'file' && node.relativePath.endsWith(fileName)
             );
 
-            if (possibleNodes.length === 1) {
-              // We found a unique match
-              if (possibleNodes[0].type === 'file') {
-                toggleFileSelection(possibleNodes[0]);
-              } else if (possibleNodes[0].type === 'directory') {
-                selectAllFilesInDirectory(possibleNodes[0]);
-              }
-            } else if (possibleNodes.length > 1) {
-              // Multiple matches, try to find the best one
-              const bestMatch = possibleNodes.find(node => node.relativePath === itemPath);
-              if (bestMatch) {
-                if (bestMatch.type === 'file') {
-                  toggleFileSelection(bestMatch);
-                } else if (bestMatch.type === 'directory') {
-                  selectAllFilesInDirectory(bestMatch);
+            if (matchingNodes.length === 1) {
+              // If there's only one match, use it
+              selectedNode = matchingNodes[0];
+            } else if (matchingNodes.length > 1) {
+              // If there are multiple matches, try to find the best one
+              // by looking at the displayed content
+              const fullPath = itemContent.replace(/[│├└]─?\s*/g, '').replace(/^\s*(?:✓\s*)?/, '').replace(/\{[^}]+\}/g, '');
+
+              // Try to find a node whose path is contained in the displayed content
+              for (const node of matchingNodes) {
+                if (fullPath.includes(node.relativePath)) {
+                  selectedNode = node;
+                  break;
                 }
               }
+
+              // If we still don't have a match, just use the first one
+              if (!selectedNode) {
+                selectedNode = matchingNodes[0];
+              }
             }
-          } else {
-            // We found an exact match
+          } else if (isDirectory && dirName) {
+            // For directories, find the node that matches this directory name
+            const matchingNodes = searchResults.filter(node =>
+              node.type === 'directory' && node.relativePath.endsWith(dirName.replace(/\\$/, ''))
+            );
+
+            if (matchingNodes.length > 0) {
+              // Use the first matching directory
+              selectedNode = matchingNodes[0];
+            }
+          }
+
+          // If we found a node, toggle its selection
+          if (selectedNode) {
             if (selectedNode.type === 'file') {
               toggleFileSelection(selectedNode);
             } else if (selectedNode.type === 'directory') {
               selectAllFilesInDirectory(selectedNode);
+            }
+          } else {
+            // If we couldn't find a node, try a more aggressive approach
+            // Look for any node that might match the selected item
+            const contentWithoutFormatting = itemContent.replace(/\{[^}]+\}/g, '');
+
+            // Try to find any file or directory that might be related to this content
+            for (const node of searchResults) {
+              if ((isFile && node.type === 'file') || (isDirectory && node.type === 'directory')) {
+                if (contentWithoutFormatting.includes(node.name)) {
+                  selectedNode = node;
+                  break;
+                }
+              }
+            }
+
+            // If we found a node with this fallback approach, toggle its selection
+            if (selectedNode) {
+              if (selectedNode.type === 'file') {
+                toggleFileSelection(selectedNode);
+              } else if (selectedNode.type === 'directory') {
+                selectAllFilesInDirectory(selectedNode);
+              }
+            } else {
+              console.error(`Could not find node for selected item: ${itemContent}`);
             }
           }
 
@@ -1012,9 +1073,12 @@ function displaySearchResults(box, results, preserveSelection = false) {
         // This file belongs to a directory that's in our results
         groupedResults[dirPath].push(node);
       } else {
-        // Standalone file or belongs to a directory not in results
-        // Use the file's path as the key
-        groupedResults[node.relativePath] = [node];
+        // Create the directory entry if it doesn't exist
+        if (!groupedResults[dirPath]) {
+          groupedResults[dirPath] = [];
+        }
+        // Add the file to its directory
+        groupedResults[dirPath].push(node);
       }
     }
   });
@@ -1048,26 +1112,25 @@ function displaySearchResults(box, results, preserveSelection = false) {
           dirBranches = dirBranches.substring(0, dirBranches.length - 2) + '└─';
         }
 
-        if (dirNode) {
-          // Add the directory entry
-          const dirPrefix = '▶ ';
-          const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
-          const displayPath = relativePath + '\\';
+        // Always add a directory entry, even if we don't have a dirNode
+        // This ensures all files have a parent directory in the display
+        const dirPrefix = '▶ ';
+        const selected = dirNode && isFileSelected(dirNode) ? '✓ ' : '  ';
+        const displayPath = relativePath + '\\';
 
-          // Format the path with the rightmost part in bold
-          let formattedPath = displayPath;
-          try {
-            formattedPath = formatPathWithBoldRightmost(displayPath);
-          } catch (formatError) {
-            console.error('Error formatting path:', formatError);
-          }
+        // Format the path with the rightmost part in bold
+        let formattedPath = displayPath;
+        try {
+          formattedPath = formatPathWithBoldRightmost(displayPath);
+        } catch (formatError) {
+          console.error('Error formatting path:', formatError);
+        }
 
-          // If the directory is selected, wrap the checkmark with color tags
-          if (isFileSelected(dirNode)) {
-            items.push(`${dirBranches}${dirPrefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
-          } else {
-            items.push(`${dirBranches}${dirPrefix}${selected}${formattedPath}`);
-          }
+        // If the directory is selected, wrap the checkmark with color tags
+        if (dirNode && isFileSelected(dirNode)) {
+          items.push(`${dirBranches}${dirPrefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
+        } else {
+          items.push(`${dirBranches}${dirPrefix}${selected}${formattedPath}`);
         }
 
         // Add the files in this directory
