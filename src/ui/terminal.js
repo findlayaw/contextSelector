@@ -17,11 +17,16 @@ let expandedDirs = new Set();
 let isSearchActive = false;
 let searchResults = [];
 let originalTree = null;
+let groupedResults = {};
 
 // Store template to save
 let templateToSave = null;
 // Store files to be saved in the template (snapshot at time of saving)
 let templateFiles = [];
+
+// Store multi-selection state
+let multiSelectStartIndex = -1;
+let highlightedIndices = new Set();
 
 /**
  * Start the terminal UI
@@ -290,6 +295,75 @@ async function start(options) {
       });
 
       screen.key('space', () => {
+        // Check if we have highlighted items for multi-selection
+        if (highlightedIndices.size > 0) {
+          if (isSearchActive) {
+            // In search mode, we need to handle the highlighted items differently
+            // We need to find the corresponding nodes in the search results
+            let currentIndex = 0;
+
+            // Process directories first
+            Object.keys(groupedResults).sort((a, b) => a.localeCompare(b)).forEach(relativePath => {
+              // Check if this directory is highlighted
+              if (highlightedIndices.has(currentIndex)) {
+                // Find the directory node in search results
+                const dirNode = searchResults.find(node =>
+                  node.type === 'directory' && node.relativePath === relativePath
+                );
+
+                if (dirNode) {
+                  // Toggle selection for this directory
+                  selectAllFilesInDirectory(dirNode);
+                }
+              }
+              currentIndex++;
+
+              // Process files in this directory
+              const files = groupedResults[relativePath] || [];
+              files.forEach(fileNode => {
+                if (fileNode.type === 'file') {
+                  // Check if this file is highlighted
+                  if (highlightedIndices.has(currentIndex)) {
+                    // Toggle selection for this file
+                    toggleFileSelection(fileNode);
+                  }
+                  currentIndex++;
+                }
+              });
+            });
+          } else {
+            // In normal mode, use the flattened tree
+            highlightedIndices.forEach(index => {
+              if (index < flattenedTree.length) {
+                const node = flattenedTree[index];
+                if (node.type === 'file') {
+                  toggleFileSelection(node);
+                } else if (node.type === 'directory') {
+                  selectAllFilesInDirectory(node);
+                }
+              }
+            });
+          }
+
+          // Clear the multi-selection state
+          multiSelectStartIndex = -1;
+          highlightedIndices.clear();
+
+          // Update UI
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+
+          if (isSearchActive) {
+            displaySearchResults(treeBox, searchResults, true);
+          } else {
+            renderTree(treeBox, directoryTree);
+          }
+
+          screen.render();
+          return;
+        }
+
         if (isSearchActive) {
           // In search mode with our new grouped display
           const selectedIndex = treeBox.selected;
@@ -412,7 +486,11 @@ async function start(options) {
           updateStatus(statusBox, true, false, templateSelectBox);
 
           // Update the display to show the selection, preserving the current selection position
-          displaySearchResults(treeBox, searchResults, true);
+          if (highlightedIndices.size > 0) {
+            displaySearchResultsWithHighlights(treeBox, searchResults, true);
+          } else {
+            displaySearchResults(treeBox, searchResults, true);
+          }
           screen.render();
         } else {
           // Normal mode
@@ -639,6 +717,239 @@ async function start(options) {
         // Scroll to the calculated position
         treeBox.scrollTo(scrollPosition);
         screen.render();
+      });
+
+      // Add Vim-like navigation: h (left/parent directory)
+      screen.key('h', () => {
+        if (isSearchActive) return; // Don't handle in search mode
+
+        const node = getCurrentNode(treeBox);
+        if (!node) return;
+
+        // Get the parent directory path
+        const parentPath = path.dirname(node.path);
+
+        // If we're already at the root, do nothing
+        if (parentPath === node.path) return;
+
+        // Find the parent node in our flattened tree
+        const parentNode = flattenedTree.find(n => n.path === parentPath);
+        if (!parentNode) return;
+
+        // Find the index of the parent node
+        const parentIndex = flattenedTree.indexOf(parentNode);
+        if (parentIndex === -1) return;
+
+        // Select the parent node
+        treeBox.select(parentIndex);
+
+        // Calculate the scroll position to maintain padding at the top
+        const paddingLines = 3;
+        const scrollPosition = Math.max(0, parentIndex - paddingLines);
+        treeBox.scrollTo(scrollPosition);
+
+        screen.render();
+      });
+
+      // Add Vim-like navigation: l (right/expand directory)
+      screen.key('l', () => {
+        if (isSearchActive) return; // Don't handle in search mode
+
+        const node = getCurrentNode(treeBox);
+        if (!node) return;
+
+        if (node.type === 'directory') {
+          // If directory is not expanded, expand it
+          if (!isNodeExpanded(node)) {
+            expandedDirs.add(node.path);
+            renderTree(treeBox, directoryTree);
+          }
+          // If directory has children and is already expanded, select the first child
+          else if (node.children && node.children.length > 0) {
+            // Find the index of the first child in the flattened tree
+            const firstChildIndex = flattenedTree.findIndex(n =>
+              n.path.startsWith(node.path + '\\') &&
+              n.path.split('\\').length === node.path.split('\\').length + 1
+            );
+
+            if (firstChildIndex !== -1) {
+              treeBox.select(firstChildIndex);
+
+              // Calculate the scroll position to maintain padding at the top
+              const paddingLines = 3;
+              const scrollPosition = Math.max(0, firstChildIndex - paddingLines);
+              treeBox.scrollTo(scrollPosition);
+            }
+          }
+        }
+
+        screen.render();
+      });
+
+      // Add Vim-like navigation: g (jump to top)
+      screen.key('g', () => {
+        treeBox.select(0);
+        treeBox.scrollTo(0);
+        screen.render();
+      });
+
+      // Add Vim-like navigation: G (jump to bottom)
+      screen.key('G', () => {
+        const lastIndex = treeBox.items.length - 1;
+        treeBox.select(lastIndex);
+
+        // Calculate the scroll position to show the last item at the bottom
+        const visibleHeight = treeBox.height - 2; // Account for borders
+        const scrollPosition = Math.max(0, lastIndex - visibleHeight + 1);
+        treeBox.scrollTo(scrollPosition);
+
+        screen.render();
+      });
+
+      // Add 'a' key to toggle selection of all visible files
+      screen.key('a', () => {
+        if (isSearchActive) {
+          // In search mode, toggle all visible files in search results
+          const allSelected = searchResults.every(node => {
+            if (node.type === 'file') return isFileSelected(node);
+            if (node.type === 'directory') return areAllFilesInDirectorySelected(node);
+            return true;
+          });
+
+          // Toggle selection based on current state
+          searchResults.forEach(node => {
+            if (node.type === 'file') {
+              if (allSelected) {
+                // Deselect if all are selected
+                const index = selectedFiles.findIndex(f => f.path === node.path);
+                if (index !== -1) selectedFiles.splice(index, 1);
+              } else if (!isFileSelected(node)) {
+                // Select if not all are selected
+                selectedFiles.push(node);
+              }
+            } else if (node.type === 'directory') {
+              if (allSelected) {
+                deselectAllFilesInDirectory(node);
+              } else {
+                selectAllFilesInSubdirectory(node);
+              }
+            }
+          });
+
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox, true, false, templateSelectBox);
+          displaySearchResults(treeBox, searchResults, true);
+        } else {
+          // In normal mode, toggle all visible files in the current view
+          const visibleNodes = flattenedTree;
+          const allSelected = visibleNodes.every(node => {
+            if (node.type === 'file') return isFileSelected(node);
+            if (node.type === 'directory') return areAllFilesInDirectorySelected(node);
+            return true;
+          });
+
+          // Toggle selection based on current state
+          visibleNodes.forEach(node => {
+            if (node.type === 'file') {
+              if (allSelected) {
+                // Deselect if all are selected
+                const index = selectedFiles.findIndex(f => f.path === node.path);
+                if (index !== -1) selectedFiles.splice(index, 1);
+              } else if (!isFileSelected(node)) {
+                // Select if not all are selected
+                selectedFiles.push(node);
+              }
+            } else if (node.type === 'directory') {
+              if (allSelected) {
+                deselectAllFilesInDirectory(node);
+              } else {
+                selectAllFilesInSubdirectory(node);
+              }
+            }
+          });
+
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox, false, false, templateSelectBox);
+          renderTree(treeBox, directoryTree);
+        }
+
+        screen.render();
+      });
+
+      // Add shift+arrow keys for multi-selection highlighting
+      screen.key('S-up', () => {
+        if (treeBox.selected <= 0) return;
+
+        // Initialize multi-selection if not started
+        if (multiSelectStartIndex === -1) {
+          multiSelectStartIndex = treeBox.selected;
+          highlightedIndices.clear();
+        }
+
+        // Move selection up
+        treeBox.up();
+
+        // Update highlighted indices
+        updateHighlightedIndices(treeBox);
+
+        // Apply highlighting based on whether we're in search mode or normal mode
+        if (isSearchActive) {
+          // In search mode, we need to re-render the search results with highlights
+          displaySearchResultsWithHighlights(treeBox, searchResults, true);
+        } else {
+          // In normal mode, use the standard highlight rendering
+          renderTreeWithHighlights(treeBox);
+        }
+
+        // Calculate the scroll position to maintain padding at the top
+        const currentSelection = treeBox.selected;
+        const paddingLines = 3;
+        const scrollPosition = Math.max(0, currentSelection - paddingLines);
+        treeBox.scrollTo(scrollPosition);
+
+        screen.render();
+      });
+
+      screen.key('S-down', () => {
+        if (treeBox.selected >= treeBox.items.length - 1) return;
+
+        // Initialize multi-selection if not started
+        if (multiSelectStartIndex === -1) {
+          multiSelectStartIndex = treeBox.selected;
+          highlightedIndices.clear();
+        }
+
+        // Move selection down
+        treeBox.down();
+
+        // Update highlighted indices
+        updateHighlightedIndices(treeBox);
+
+        // Apply highlighting based on whether we're in search mode or normal mode
+        if (isSearchActive) {
+          // In search mode, we need to re-render the search results with highlights
+          displaySearchResultsWithHighlights(treeBox, searchResults, true);
+        } else {
+          // In normal mode, use the standard highlight rendering
+          renderTreeWithHighlights(treeBox);
+        }
+
+        // Calculate the scroll position to maintain padding at the top
+        const currentSelection = treeBox.selected;
+        const paddingLines = 3;
+        const scrollPosition = Math.max(0, currentSelection - paddingLines);
+        treeBox.scrollTo(scrollPosition);
+
+        screen.render();
+      });
+
+      // Clear multi-selection when regular arrow keys are used
+      screen.key(['up', 'down', 'left', 'right'], () => {
+        // Clear multi-selection state when navigating without shift
+        multiSelectStartIndex = -1;
+        highlightedIndices.clear();
       });
 
       // Set focus to the tree box
@@ -1017,7 +1328,9 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
   const content = [
     `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` + (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : ''),
     '{bold}Controls:{/bold}',
-    '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}Enter:{/bold} Expand/collapse    {bold}Space:{/bold} Toggle selection',
+    '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}h:{/bold} Parent directory   {bold}l:{/bold} Enter directory',
+    '  {bold}Vim-like:{/bold}       {bold}g:{/bold} Jump to top     {bold}G:{/bold} Jump to bottom     {bold}a:{/bold} Toggle all visible',
+    '  {bold}Selection:{/bold}      {bold}Space:{/bold} Toggle select  {bold}S-↑/↓:{/bold} Multi-select',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
     '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q:{/bold} Quit',
     `  {bold}Exit/Cancel:{/bold}    {bold}Esc:{/bold} ${escapeAction}`
@@ -1056,7 +1369,7 @@ function displaySearchResults(box, results, preserveSelection = false) {
   }
 
   // Group results by directory for better organization
-  const groupedResults = {};
+  groupedResults = {};
 
   // First pass: collect all directories
   results.forEach(node => {
@@ -1285,35 +1598,232 @@ function formatPathWithBoldRightmost(displayPath) {
 }
 
 /**
- * Format a path with the rightmost part in bold
- * @param {string} displayPath - Path to format
- * @returns {string} - Formatted path with rightmost part in bold
+ * Update the highlighted indices for multi-selection
+ * @param {Object} box - Blessed box containing the tree
  */
-function formatPathWithBoldRightmost(displayPath) {
-  if (!displayPath) return '';
+function updateHighlightedIndices(box) {
+  // If multi-selection is not active, do nothing
+  if (multiSelectStartIndex === -1) return;
 
-  // For directory paths ending with '\', we need to handle them specially
-  const isDirectory = displayPath.endsWith('\\');
+  // Clear previous highlights
+  highlightedIndices.clear();
 
-  // Remove trailing backslash for processing if it's a directory
-  const processPath = isDirectory ? displayPath.slice(0, -1) : displayPath;
+  // Get the current selection index
+  const currentIndex = box.selected;
 
-  // Find the last backslash to determine the rightmost part
-  const lastBackslashIndex = processPath.lastIndexOf('\\');
+  // Determine the range to highlight
+  const startIdx = Math.min(multiSelectStartIndex, currentIndex);
+  const endIdx = Math.max(multiSelectStartIndex, currentIndex);
 
-  if (lastBackslashIndex === -1) {
-    // No backslash found, the entire path is the rightmost part
-    return `{bold}${displayPath}{/bold}`;
-  } else {
-    // Split the path into prefix and rightmost part
-    const prefix = processPath.substring(0, lastBackslashIndex + 1);
-    const rightmost = processPath.substring(lastBackslashIndex + 1);
-
-    // Add the trailing backslash to the rightmost part if it's a directory
-    const formattedRightmost = isDirectory ? `{bold}${rightmost}\\{/bold}` : `{bold}${rightmost}{/bold}`;
-
-    return prefix + formattedRightmost;
+  // Add all indices in the range to the highlighted set
+  for (let i = startIdx; i <= endIdx; i++) {
+    highlightedIndices.add(i);
   }
+}
+
+/**
+ * Render the tree with highlighted items for multi-selection
+ * @param {Object} box - Blessed box containing the tree
+ */
+function renderTreeWithHighlights(box) {
+  // If no items are highlighted, do nothing special
+  if (highlightedIndices.size === 0) return;
+
+  // Store the current selection
+  const currentSelection = box.selected;
+
+  // Get the current items
+  const items = box.items.map((item, index) => {
+    // Check if this index is in the highlighted set
+    if (highlightedIndices.has(index)) {
+      // Apply a highlight style to the item
+      // We'll use a yellow background to indicate highlighted but not selected items
+      return `{yellow-bg}${item.content}{/yellow-bg}`;
+    }
+    return item.content;
+  });
+
+  // Update the items with the highlighted versions
+  box.setItems(items);
+
+  // Restore the current selection
+  box.select(currentSelection);
+}
+
+/**
+ * Display search results with highlighted items for multi-selection
+ * @param {Object} box - Blessed box containing the tree
+ * @param {Array} results - Search results to display
+ * @param {boolean} preserveSelection - Whether to preserve the current selection
+ */
+function displaySearchResultsWithHighlights(box, results, preserveSelection = false) {
+  // If no results, show a message
+  if (results.length === 0) {
+    box.setItems(['No search results found']);
+    return;
+  }
+
+  // Store the current selection position if we need to preserve it
+  const currentSelection = preserveSelection ? box.selected : 0;
+
+  // Use the existing groupedResults if available, otherwise create a new one
+  if (Object.keys(groupedResults).length === 0) {
+    // Group results by directory for better organization
+    groupedResults = {};
+
+    // First pass: collect all directories
+    results.forEach(node => {
+      if (node.type === 'directory') {
+        groupedResults[node.relativePath] = [];
+      }
+    });
+
+    // Second pass: assign files to their directories or create standalone entries
+    results.forEach(node => {
+      if (node.type === 'file') {
+        const dirPath = path.dirname(node.relativePath);
+        if (groupedResults[dirPath]) {
+          // This file belongs to a directory that's in our results
+          groupedResults[dirPath].push(node);
+        } else {
+          // Create the directory entry if it doesn't exist
+          if (!groupedResults[dirPath]) {
+            groupedResults[dirPath] = [];
+          }
+          // Add the file to its directory
+          groupedResults[dirPath].push(node);
+        }
+      }
+    });
+  }
+
+  // Create a virtual tree with just the search results
+  const items = [];
+
+  // Sort the keys (paths) to maintain directory structure
+  const sortedPaths = Object.keys(groupedResults).sort((a, b) => a.localeCompare(b));
+
+  // Build the display items
+  try {
+    sortedPaths.forEach((relativePath) => {
+      try {
+        // Find the directory node if it exists
+        const dirNode = results.find(node =>
+          node.type === 'directory' && node.relativePath === relativePath
+        );
+
+        // Split the path to determine the directory structure
+        const dirParts = relativePath.split('\\');
+
+        // Generate simple tree branches for directories based on depth
+        let dirBranches = '';
+        for (let i = 0; i < dirParts.length - 1; i++) {
+          dirBranches += '│ ';
+        }
+
+        // Replace the last vertical line with a corner if needed
+        if (dirBranches.length >= 2) {
+          dirBranches = dirBranches.substring(0, dirBranches.length - 2) + '└─';
+        }
+
+        // Always add a directory entry, even if we don't have a dirNode
+        // This ensures all files have a parent directory in the display
+        const dirPrefix = '▶ ';
+        const selected = dirNode && isFileSelected(dirNode) ? '✓ ' : '  ';
+        const displayPath = relativePath + '\\';
+
+        // Format the path with the rightmost part in bold
+        let formattedPath = displayPath;
+        try {
+          formattedPath = formatPathWithBoldRightmost(displayPath);
+        } catch (formatError) {
+          console.error('Error formatting path:', formatError);
+        }
+
+        // Create the directory item content
+        let dirContent = '';
+        if (dirNode && isFileSelected(dirNode)) {
+          dirContent = `${dirBranches}${dirPrefix}{green-fg}${selected}{/green-fg}${formattedPath}`;
+        } else {
+          dirContent = `${dirBranches}${dirPrefix}${selected}${formattedPath}`;
+        }
+
+        // Check if this directory item should be highlighted
+        if (highlightedIndices.has(items.length)) {
+          dirContent = `{yellow-bg}${dirContent}{/yellow-bg}`;
+        }
+
+        items.push(dirContent);
+
+        // Add the files in this directory
+        const files = groupedResults[relativePath];
+        if (files && files.length > 0) {
+          files.forEach((fileNode, fileIndex) => {
+            try {
+              if (fileNode.type === 'file') {
+                // Generate file branch - use └─ for last file, ├─ for others
+                const isLastFile = fileIndex === files.length - 1;
+                const fileBranch = dirBranches + (isLastFile ? '└─' : '├─');
+                const filePrefix = '  ';
+                const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
+                const displayPath = fileNode.relativePath;
+
+                // Format the path with the rightmost part in bold
+                let formattedPath = displayPath;
+                try {
+                  formattedPath = formatPathWithBoldRightmost(displayPath);
+                } catch (formatError) {
+                  console.error('Error formatting path:', formatError);
+                }
+
+                // Create the file item content
+                let fileContent = '';
+                if (isFileSelected(fileNode)) {
+                  fileContent = `${fileBranch}${filePrefix}{green-fg}${selected}{/green-fg}${formattedPath}`;
+                } else {
+                  fileContent = `${fileBranch}${filePrefix}${selected}${formattedPath}`;
+                }
+
+                // Check if this file item should be highlighted
+                if (highlightedIndices.has(items.length)) {
+                  fileContent = `{yellow-bg}${fileContent}{/yellow-bg}`;
+                }
+
+                items.push(fileContent);
+              }
+            } catch (fileError) {
+              console.error('Error processing file:', fileError);
+              items.push(`Error: ${fileNode ? fileNode.relativePath || 'unknown file' : 'null file'}`);
+            }
+          });
+        }
+      } catch (dirError) {
+        console.error('Error processing directory:', dirError);
+        items.push(`Error: ${relativePath || 'unknown directory'}`);
+      }
+    });
+  } catch (error) {
+    console.error('Error building display items:', error);
+    items.push('Error building display items: ' + error.message);
+  }
+
+  // Set the items in the list
+  box.setItems(items);
+
+  // Restore the selection position if preserving, otherwise select the first item
+  if (preserveSelection && currentSelection < items.length) {
+    box.select(currentSelection);
+  } else {
+    box.select(0);
+  }
+
+  // Calculate the scroll position to maintain padding at the top
+  const selectedIndex = box.selected;
+  const paddingLines = 3; // Number of lines to show above the selected item
+  const scrollPosition = Math.max(0, selectedIndex - paddingLines);
+
+  // Scroll to the calculated position
+  box.scrollTo(scrollPosition);
 }
 
 module.exports = { start };

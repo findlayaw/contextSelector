@@ -16,7 +16,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/context-selector.git
+git clone https://github.com/findlayaw/context-selector.git
 cd context-selector
 
 # Install dependencies
@@ -46,15 +46,27 @@ aw --template "my-template"
 
 ## Keyboard Controls
 
+### Navigation
 - **↑/↓**: Navigate through files and directories
 - **Enter**: Expand/collapse directory
-- **Space**: Select/deselect file
+- **h**: Move to parent directory (like vim's left)
+- **l**: Enter directory or expand it (like vim's right)
+- **g**: Jump to top of list
+- **G**: Jump to bottom of list
+
+### Selection
+- **Space**: Select/deselect file or directory
+- **a**: Toggle selection of all visible files (includes folders as well)
+- **Shift + ↑/↓**: Highlight multiple files at once (press Space to select highlighted files)
+
+### Templates and Actions
 - **/**: Search for files and folders
 - **t**: Load a saved template
 - **s**: Save current selection as a template
 - **d**: Delete a template (when in template selection view)
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
+- **Escape**: Exit search mode, close template selection, or quit
 
 ## Output Format
 
