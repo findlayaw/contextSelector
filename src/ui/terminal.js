@@ -193,6 +193,8 @@ async function start(options) {
           updateSelectedFiles(infoBox);
           updateTokenCount();
           updateStatus(statusBox);
+          // Render the tree to show visual indicators for selected files
+          renderTree(treeBox, directoryTree);
         }
       }
 
@@ -394,6 +396,8 @@ async function start(options) {
           updateSelectedFiles(infoBox);
           updateTokenCount();
           updateStatus(statusBox);
+          // Render the tree to show visual indicators for selected files
+          renderTree(treeBox, directoryTree);
         }
 
         screen.render();
