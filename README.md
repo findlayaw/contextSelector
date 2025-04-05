@@ -52,6 +52,7 @@ aw --template "my-template"
 - **/**: Search for files and folders
 - **t**: Load a saved template
 - **s**: Save current selection as a template
+- **d**: Delete a template (when in template selection view)
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
 
@@ -99,6 +100,11 @@ console.log('Hello, world!');
 ## Templates
 
 You can save your file selections as templates for future use. Templates are stored in `~/.context-selector/templates/`.
+
+To manage templates:
+- Press `t` to open the template selection view
+- Select a template and press Enter to load it
+- Press `d` while in the template selection view to delete the selected template
 
 ## License
 

@@ -142,6 +142,21 @@ async function start(options) {
         tags: true
       });
 
+      // Create the confirmation dialog box
+      const confirmationBox = blessed.box({
+        bottom: 3,
+        left: 'center',
+        width: '50%',
+        height: 7,
+        border: {
+          type: 'line'
+        },
+        label: ' Confirm ',
+        hidden: true,
+        tags: true,
+        content: ''
+      });
+
       // Create the template selection box
       const templateSelectBox = blessed.list({
         bottom: 3,
@@ -172,6 +187,7 @@ async function start(options) {
       screen.append(searchBox);
       screen.append(templateNameBox);
       screen.append(templateSelectBox);
+      screen.append(confirmationBox);
 
       // Load the directory tree
       directoryTree = await fileSystem.getDirectoryTree(options.startDir);
@@ -416,6 +432,43 @@ async function start(options) {
         treeBox.focus();
         // Force a complete redraw of the screen
         screen.clearRegion(0, screen.width, 0, screen.height);
+        screen.render();
+      });
+
+      // Add delete template functionality
+      templateSelectBox.key('d', async () => {
+        const selectedItem = templateSelectBox.getItem(templateSelectBox.selected);
+        if (!selectedItem || selectedItem.content === 'No templates available') {
+          return;
+        }
+
+        const templateName = selectedItem.content;
+        showConfirmationDialog(
+          confirmationBox,
+          `Are you sure you want to delete template "${templateName}"?\n\n[y] Yes  [n] No`,
+          async (confirmed) => {
+            if (confirmed) {
+              const success = await templateManager.deleteTemplate(templateName);
+
+              // Refresh the template list
+              const templates = await templateManager.listTemplates();
+              if (templates.length === 0) {
+                templateSelectBox.setItems(['No templates available']);
+              } else {
+                templateSelectBox.setItems(templates);
+              }
+
+              // Show a notification
+              statusBox.setContent(success
+                ? `Template "${templateName}" deleted successfully.\n\n` + updateStatus(statusBox, isSearchActive, true)
+                : `Failed to delete template "${templateName}".\n\n` + updateStatus(statusBox, isSearchActive, true));
+            }
+
+            // Return focus to template selection box
+            templateSelectBox.focus();
+            screen.render();
+          }
+        );
         screen.render();
       });
 
@@ -746,7 +799,7 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false) {
     `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` + (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : ''),
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}Enter:{/bold} Expand/collapse    {bold}Space:{/bold} Toggle selection',
-    '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template',
+    '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
     '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q/Esc:{/bold} ' + (isSearchMode ? 'Exit search' : 'Quit')
   ].filter(line => line !== '').join('\n');
 
@@ -825,6 +878,43 @@ async function showTemplateSelection(box) {
   box.hidden = false;
   box.show();
   box.focus();
+}
+
+/**
+ * Show a confirmation dialog
+ * @param {Object} box - Blessed box for the confirmation dialog
+ * @param {string} message - Message to display
+ * @param {Function} callback - Callback function to call with the result (true/false)
+ */
+function showConfirmationDialog(box, message, callback) {
+  // Set the content of the confirmation box
+  box.setContent(message);
+
+  // Show the box
+  box.hidden = false;
+  box.show();
+
+  // Handle key events for the confirmation dialog
+  const onKey = (_, key) => {
+    if (key.name === 'y') {
+      // User confirmed
+      box.hide();
+      box.hidden = true;
+      // Remove the key event handler
+      box.screen.unkey(['y', 'n'], onKey);
+      callback(true);
+    } else if (key.name === 'n' || key.name === 'escape') {
+      // User cancelled
+      box.hide();
+      box.hidden = true;
+      // Remove the key event handler
+      box.screen.unkey(['y', 'n'], onKey);
+      callback(false);
+    }
+  };
+
+  // Add the key event handler
+  box.screen.key(['y', 'n'], onKey);
 }
 
 module.exports = { start };
