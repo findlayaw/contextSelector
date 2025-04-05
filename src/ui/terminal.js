@@ -28,6 +28,9 @@ let templateFiles = [];
 let multiSelectStartIndex = -1;
 let highlightedIndices = new Set();
 
+// Track which box has focus (treeBox or infoBox)
+let activeBox = 'treeBox';
+
 /**
  * Start the terminal UI
  * @param {Object} options - UI options
@@ -76,8 +79,8 @@ async function start(options) {
         items: []
       });
 
-      // Create the info box
-      const infoBox = blessed.box({
+      // Create the info box (as a list to allow selection and navigation)
+      const infoBox = blessed.list({
         top: 0,
         right: 0,
         width: '30%',
@@ -97,7 +100,14 @@ async function start(options) {
         keys: true,
         vi: true,
         mouse: false,
-        tags: true
+        tags: true,
+        style: {
+          selected: {
+            bg: 'blue',
+            fg: 'white'
+          }
+        },
+        items: []
       });
 
       // Create the status box
@@ -295,6 +305,9 @@ async function start(options) {
       });
 
       screen.key('space', () => {
+        // Skip if infoBox has focus - let the infoBox space handler handle it
+        if (activeBox === 'infoBox') return;
+
         // Check if we have highlighted items for multi-selection
         if (highlightedIndices.size > 0) {
           if (isSearchActive) {
@@ -952,8 +965,81 @@ async function start(options) {
         highlightedIndices.clear();
       });
 
-      // Set focus to the tree box
+      // Add Tab key handler to toggle focus between treeBox and infoBox
+      screen.key('tab', () => {
+        // Toggle active box
+        if (activeBox === 'treeBox') {
+          // Switch to infoBox if there are selected files
+          if (selectedFiles.length > 0) {
+            activeBox = 'infoBox';
+            infoBox.focus();
+          } else {
+            // Show a message in the status box if there are no files to select
+            statusBox.setContent('{bold}No files selected.{/bold} Select files in the file explorer first.');
+            setTimeout(() => {
+              updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+              screen.render();
+            }, 2000); // Show message for 2 seconds
+          }
+        } else {
+          // Switch to treeBox
+          activeBox = 'treeBox';
+          treeBox.focus();
+        }
+        screen.render();
+      });
+
+      // Add key handlers for infoBox
+      infoBox.on('focus', () => {
+        activeBox = 'infoBox';
+        // Update border styles to show focus
+        treeBox.style.border = { fg: 'white' };
+        infoBox.style.border = { fg: 'green' };
+        screen.render();
+      });
+
+      // Add space key handler for infoBox to unselect files
+      infoBox.key('space', () => {
+        // Ensure infoBox has focus
+        activeBox = 'infoBox';
+
+        if (selectedFiles.length === 0) return;
+
+        // Get the selected file
+        const selectedIndex = infoBox.selected;
+        if (selectedIndex >= 0 && selectedIndex < selectedFiles.length) {
+          // Remove the file from selectedFiles
+          selectedFiles.splice(selectedIndex, 1);
+
+          // Update UI
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+
+          if (isSearchActive) {
+            displaySearchResults(treeBox, searchResults, true);
+          } else {
+            renderTree(treeBox, directoryTree);
+          }
+
+          screen.render();
+        }
+      });
+
+      // Add focus handler for treeBox
+      treeBox.on('focus', () => {
+        activeBox = 'treeBox';
+        // Update border styles to show focus
+        treeBox.style.border = { fg: 'green' };
+        infoBox.style.border = { fg: 'white' };
+        screen.render();
+      });
+
+      // Set focus to the tree box and update border styles
+      activeBox = 'treeBox';
       treeBox.focus();
+      treeBox.style.border = { fg: 'green' };
+      infoBox.style.border = { fg: 'white' };
 
       // Render the screen
       screen.render();
@@ -1282,18 +1368,39 @@ function isFileSelected(node) {
 
 /**
  * Update the selected files display
- * @param {Object} box - Blessed box to update
+ * @param {Object} box - Blessed list to update
  */
 function updateSelectedFiles(box) {
-  let content = '';
+  let items = [];
 
   if (selectedFiles.length === 0) {
-    content = 'No files selected';
+    items = ['No files selected'];
   } else {
-    content = selectedFiles.map(file => file.relativePath).join('\n');
+    items = selectedFiles.map(file => file.relativePath);
   }
 
-  box.setContent(content);
+  // Store the current selection position if we need to preserve it
+  const currentSelection = box.selected || 0;
+
+  // Set the items in the list
+  box.setItems(items);
+
+  // Restore the selection position if possible
+  if (currentSelection < items.length) {
+    box.select(currentSelection);
+  } else if (items.length > 0) {
+    box.select(0);
+  }
+
+  // Calculate the scroll position to maintain padding at the top
+  if (items.length > 0) {
+    const selectedIndex = box.selected;
+    const paddingLines = 3; // Number of lines to show above the selected item
+    const scrollPosition = Math.max(0, selectedIndex - paddingLines);
+
+    // Scroll to the calculated position
+    box.scrollTo(scrollPosition);
+  }
 }
 
 /**
@@ -1330,6 +1437,7 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}h:{/bold} Parent directory   {bold}l:{/bold} Enter directory',
     '  {bold}Vim-like:{/bold}       {bold}g:{/bold} Jump to top     {bold}G:{/bold} Jump to bottom     {bold}a:{/bold} Toggle all visible',
+    '  {bold}UI Focus:{/bold}       {bold}Tab:{/bold} Switch panels   {bold}Space:{/bold} Select/Unselect',
     '  {bold}Selection:{/bold}      {bold}Space:{/bold} Toggle select  {bold}S-↑/↓:{/bold} Multi-select',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
     '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q:{/bold} Quit',

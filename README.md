@@ -53,9 +53,11 @@ aw --template "my-template"
 - **l**: Enter directory or expand it (like vim's right)
 - **g**: Jump to top of list
 - **G**: Jump to bottom of list
+- **Tab**: Toggle focus between file explorer and selected files display
 
 ### Selection
-- **Space**: Select/deselect file or directory
+- **Space**: Select/deselect file or directory (in file explorer)
+- **Space**: Unselect file (in selected files display when focused)
 - **a**: Toggle selection of all visible files (includes folders as well)
 - **Shift + ↑/↓**: Highlight multiple files at once (press Space to select highlighted files)
 
