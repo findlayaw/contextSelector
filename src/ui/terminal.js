@@ -319,10 +319,9 @@ async function start(options) {
                 if (node) { // Only act if we have a valid node mapped
                   if (node.type === 'file') {
                     toggleFileSelection(node);
-                  } else if (node.type === 'directory') {
-                    // Select/Deselect all files under this directory node
-                    selectAllFilesInDirectory(node);
                   }
+                  // We intentionally ignore directory nodes in search mode multi-selection
+                  // to avoid inconsistent selection behavior
                 } else {
                   // Optional: Log if an index doesn't map to a node
                   console.log(`Warning: Highlighted index ${index} has no mapped node.`);
