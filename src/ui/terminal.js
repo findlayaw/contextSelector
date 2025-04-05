@@ -436,7 +436,7 @@ function renderTree(box, tree) {
     const selected = isFileSelected(node) ? '✓ ' : '  ';
     const name = node.name + (node.type === 'directory' ? '/' : '');
 
-    // If the file is selected, wrap the checkmark with color tags
+    // If the node is selected, wrap the checkmark with color tags
     if (isFileSelected(node)) {
       return `${indent}${prefix}{green-fg}${selected}{/green-fg}${name}`;
     } else {
@@ -535,10 +535,78 @@ function toggleFileSelection(node) {
 }
 
 /**
- * Select all files in a directory and its subdirectories
- * @param {Object} node - Directory node to select files from
+ * Check if all files in a directory and its subdirectories are selected
+ * @param {Object} node - Directory node to check
+ * @returns {boolean} - True if all files are selected, false otherwise
+ */
+function areAllFilesInDirectorySelected(node) {
+  if (!node || node.type !== 'directory') return false;
+
+  // If there are no children, consider it not fully selected
+  if (!node.children || node.children.length === 0) return false;
+
+  // Check all children
+  for (const child of node.children) {
+    if (child.type === 'file') {
+      // If any file is not selected, return false
+      if (!isFileSelected(child)) {
+        return false;
+      }
+    } else if (child.type === 'directory') {
+      // Recursively check subdirectories
+      if (!areAllFilesInDirectorySelected(child)) {
+        return false;
+      }
+    }
+  }
+
+  // All files are selected
+  return true;
+}
+
+/**
+ * Toggle selection of all files in a directory and its subdirectories
+ * @param {Object} node - Directory node to toggle files in
  */
 function selectAllFilesInDirectory(node) {
+  if (!node || node.type !== 'directory') return;
+
+  // Check if all files are already selected
+  const allSelected = areAllFilesInDirectorySelected(node);
+
+  // Process all children
+  if (node.children && node.children.length > 0) {
+    for (const child of node.children) {
+      if (child.type === 'file') {
+        // If all files are selected, deselect this file
+        // Otherwise, select this file if it's not already selected
+        if (allSelected) {
+          const index = selectedFiles.findIndex(f => f.path === child.path);
+          if (index !== -1) {
+            selectedFiles.splice(index, 1);
+          }
+        } else if (!isFileSelected(child)) {
+          selectedFiles.push(child);
+        }
+      } else if (child.type === 'directory') {
+        // Recursively process subdirectories with the same selection state
+        if (allSelected) {
+          // Deselect all files in subdirectory
+          deselectAllFilesInDirectory(child);
+        } else {
+          // Select all files in subdirectory
+          selectAllFilesInSubdirectory(child);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Helper function to select all files in a subdirectory (without checking current state)
+ * @param {Object} node - Directory node to select files from
+ */
+function selectAllFilesInSubdirectory(node) {
   if (!node || node.type !== 'directory') return;
 
   // Process all children
@@ -551,20 +619,48 @@ function selectAllFilesInDirectory(node) {
         }
       } else if (child.type === 'directory') {
         // Recursively process subdirectories
-        selectAllFilesInDirectory(child);
+        selectAllFilesInSubdirectory(child);
       }
     }
   }
 }
 
 /**
- * Check if a file is selected
+ * Helper function to deselect all files in a directory
+ * @param {Object} node - Directory node to deselect files from
+ */
+function deselectAllFilesInDirectory(node) {
+  if (!node || node.type !== 'directory') return;
+
+  // Process all children
+  if (node.children && node.children.length > 0) {
+    for (const child of node.children) {
+      if (child.type === 'file') {
+        // Remove the file if it's selected
+        const index = selectedFiles.findIndex(f => f.path === child.path);
+        if (index !== -1) {
+          selectedFiles.splice(index, 1);
+        }
+      } else if (child.type === 'directory') {
+        // Recursively process subdirectories
+        deselectAllFilesInDirectory(child);
+      }
+    }
+  }
+}
+
+/**
+ * Check if a file or directory is selected
  * @param {Object} node - Node to check
- * @returns {boolean} - True if the file is selected
+ * @returns {boolean} - True if the file is selected or if all files in the directory are selected
  */
 function isFileSelected(node) {
-  if (node.type !== 'file') return false;
-  return selectedFiles.some(f => f.path === node.path);
+  if (node.type === 'file') {
+    return selectedFiles.some(f => f.path === node.path);
+  } else if (node.type === 'directory') {
+    return areAllFilesInDirectorySelected(node);
+  }
+  return false;
 }
 
 /**
@@ -608,7 +704,7 @@ function updateStatus(box, isSearchMode = false) {
     'Controls:',
     '  ↑/↓: Navigate',
     '  Enter: Expand/collapse directory',
-    '  Space: Select/deselect file or select all files in directory',
+    '  Space: Toggle selection of file or all files in directory',
     '  /: Search',
     '  Escape: ' + (isSearchMode ? 'Exit search mode' : 'Quit'),
     '  t: Load template',
@@ -652,7 +748,7 @@ function displaySearchResults(box, results, preserveSelection = false) {
     const name = node.name + (node.type === 'directory' ? '/' : '');
     const path = node.relativePath;
 
-    // If the file is selected, wrap the checkmark with color tags
+    // If the node is selected, wrap the checkmark with color tags
     if (isFileSelected(node)) {
       return `${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${path}){/gray-fg}`;
     } else {
