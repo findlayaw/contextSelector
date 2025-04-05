@@ -1196,4 +1196,36 @@ function formatPathWithBoldRightmost(displayPath) {
   }
 }
 
+/**
+ * Format a path with the rightmost part in bold
+ * @param {string} displayPath - Path to format
+ * @returns {string} - Formatted path with rightmost part in bold
+ */
+function formatPathWithBoldRightmost(displayPath) {
+  if (!displayPath) return '';
+
+  // For directory paths ending with '\', we need to handle them specially
+  const isDirectory = displayPath.endsWith('\\');
+
+  // Remove trailing backslash for processing if it's a directory
+  const processPath = isDirectory ? displayPath.slice(0, -1) : displayPath;
+
+  // Find the last backslash to determine the rightmost part
+  const lastBackslashIndex = processPath.lastIndexOf('\\');
+
+  if (lastBackslashIndex === -1) {
+    // No backslash found, the entire path is the rightmost part
+    return `{bold}${displayPath}{/bold}`;
+  } else {
+    // Split the path into prefix and rightmost part
+    const prefix = processPath.substring(0, lastBackslashIndex + 1);
+    const rightmost = processPath.substring(lastBackslashIndex + 1);
+
+    // Add the trailing backslash to the rightmost part if it's a directory
+    const formattedRightmost = isDirectory ? `{bold}${rightmost}\\{/bold}` : `{bold}${rightmost}{/bold}`;
+
+    return prefix + formattedRightmost;
+  }
+}
+
 module.exports = { start };
