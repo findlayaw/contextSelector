@@ -205,7 +205,7 @@ async function start(options) {
       }
 
       // Update status
-      updateStatus(statusBox);
+      updateStatus(statusBox, false, false, templateSelectBox);
 
       // If a template was specified, load it
       if (options.template) {
@@ -214,7 +214,7 @@ async function start(options) {
           selectedFiles = template.files;
           updateSelectedFiles(infoBox);
           updateTokenCount();
-          updateStatus(statusBox);
+          updateStatus(statusBox, false, false, templateSelectBox);
           // Render the tree to show visual indicators for selected files
           renderTree(treeBox, directoryTree);
         }
@@ -225,7 +225,7 @@ async function start(options) {
         const results = search.searchFiles(directoryTree, options.searchQuery);
         // Initial search from options, don't preserve selection
         displaySearchResults(treeBox, results, false);
-        updateStatus(statusBox, true);
+        updateStatus(statusBox, true, false, templateSelectBox);
       }
 
       // Handle key events
@@ -255,7 +255,7 @@ async function start(options) {
             }
 
             renderTree(treeBox, originalTree);
-            updateStatus(statusBox);
+            updateStatus(statusBox, false, false, templateSelectBox);
           }
         } else {
           // Normal mode - toggle directory expansion
@@ -281,7 +281,7 @@ async function start(options) {
             }
             updateSelectedFiles(infoBox);
             updateTokenCount();
-            updateStatus(statusBox, true);
+            updateStatus(statusBox, true, false, templateSelectBox);
 
             // Update the display to show the selection, preserving the current selection position
             displaySearchResults(treeBox, searchResults, true);
@@ -300,7 +300,7 @@ async function start(options) {
           }
           updateSelectedFiles(infoBox);
           updateTokenCount();
-          updateStatus(statusBox);
+          updateStatus(statusBox, false, false, templateSelectBox);
           renderTree(treeBox, directoryTree);
           screen.render();
         }
@@ -372,17 +372,25 @@ async function start(options) {
         screen.render();
       });
 
-      // Handle escape key to exit search mode
+      // Handle escape key to exit search mode or template selection
       screen.key('escape', () => {
         if (isSearchActive) {
           // Exit search mode and restore the original tree
           isSearchActive = false;
           searchResults = [];
           renderTree(treeBox, originalTree);
-          updateStatus(statusBox);
+          updateStatus(statusBox, false, false, templateSelectBox);
+          screen.render();
+        } else if (!templateSelectBox.hidden) {
+          // Close the template selection UI and return to main UI
+          templateSelectBox.hide();
+          templateSelectBox.hidden = true;
+          treeBox.focus();
+          // Force a complete redraw of the screen
+          screen.clearRegion(0, screen.width, 0, screen.height);
           screen.render();
         } else {
-          // Regular escape behavior (quit)
+          // Regular escape behavior (quit) - only when not in search mode or template selection
           screen.destroy();
           resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null });
         }
@@ -413,7 +421,7 @@ async function start(options) {
           templateFiles = JSON.parse(JSON.stringify(selectedFiles));
 
           // Show a notification that the template will be saved
-          statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + updateStatus(statusBox, isSearchActive, true));
+          statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox));
           // Force a complete redraw of the screen
           screen.clearRegion(0, screen.width, 0, screen.height);
           screen.render();
@@ -460,8 +468,8 @@ async function start(options) {
 
               // Show a notification
               statusBox.setContent(success
-                ? `Template "${templateName}" deleted successfully.\n\n` + updateStatus(statusBox, isSearchActive, true)
-                : `Failed to delete template "${templateName}".\n\n` + updateStatus(statusBox, isSearchActive, true));
+                ? `Template "${templateName}" deleted successfully.\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox)
+                : `Failed to delete template "${templateName}".\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox));
             }
 
             // Return focus to template selection box
@@ -484,7 +492,7 @@ async function start(options) {
           selectedFiles = template.files;
           updateSelectedFiles(infoBox);
           updateTokenCount();
-          updateStatus(statusBox);
+          updateStatus(statusBox, false, false, templateSelectBox);
           // Render the tree to show visual indicators for selected files
           renderTree(treeBox, directoryTree);
         }
@@ -791,16 +799,25 @@ function updateTokenCount() {
  * @param {Object} box - Blessed box to update
  * @param {boolean} isSearchMode - Whether we're in search mode
  * @param {boolean} returnContentOnly - Whether to return the content string instead of updating the box
+ * @param {Object} templateBox - Template selection box to check visibility
  * @returns {string|undefined} - Status content if returnContentOnly is true
  */
-function updateStatus(box, isSearchMode = false, returnContentOnly = false) {
+function updateStatus(box, isSearchMode = false, returnContentOnly = false, templateBox = null) {
   // Create a status display with all controls visible and key information in bold
+  let escapeAction = 'Quit';
+  if (isSearchMode) {
+    escapeAction = 'Exit search';
+  } else if (templateBox && !templateBox.hidden) {
+    escapeAction = 'Close template selection';
+  }
+
   const content = [
     `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` + (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : ''),
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}Enter:{/bold} Expand/collapse    {bold}Space:{/bold} Toggle selection',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
-    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q/Esc:{/bold} ' + (isSearchMode ? 'Exit search' : 'Quit')
+    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q:{/bold} Quit',
+    `  {bold}Exit/Cancel:{/bold}    {bold}Esc:{/bold} ${escapeAction}`
   ].filter(line => line !== '').join('\n');
 
   if (returnContentOnly) {
