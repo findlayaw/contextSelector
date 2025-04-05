@@ -18,6 +18,7 @@ let isSearchActive = false;
 let searchResults = [];
 let originalTree = null;
 let groupedResults = {};
+let searchListToNodeMap = []; // Map display indices to actual nodes in search mode
 
 // Store template to save
 let templateToSave = null;
@@ -311,38 +312,22 @@ async function start(options) {
         // Check if we have highlighted items for multi-selection
         if (highlightedIndices.size > 0) {
           if (isSearchActive) {
-            // In search mode, we need to handle the highlighted items differently
-            // We need to find the corresponding nodes in the search results
-            let currentIndex = 0;
-
-            // Process directories first
-            Object.keys(groupedResults).sort((a, b) => a.localeCompare(b)).forEach(relativePath => {
-              // Check if this directory is highlighted
-              if (highlightedIndices.has(currentIndex)) {
-                // Find the directory node in search results
-                const dirNode = searchResults.find(node =>
-                  node.type === 'directory' && node.relativePath === relativePath
-                );
-
-                if (dirNode) {
-                  // Toggle selection for this directory
-                  selectAllFilesInDirectory(dirNode);
+            // In search mode, use the searchListToNodeMap to directly access nodes
+            highlightedIndices.forEach(index => {
+              if (index >= 0 && index < searchListToNodeMap.length) {
+                const node = searchListToNodeMap[index];
+                if (node) { // Only act if we have a valid node mapped
+                  if (node.type === 'file') {
+                    toggleFileSelection(node);
+                  } else if (node.type === 'directory') {
+                    // Select/Deselect all files under this directory node
+                    selectAllFilesInDirectory(node);
+                  }
+                } else {
+                  // Optional: Log if an index doesn't map to a node
+                  console.log(`Warning: Highlighted index ${index} has no mapped node.`);
                 }
               }
-              currentIndex++;
-
-              // Process files in this directory
-              const files = groupedResults[relativePath] || [];
-              files.forEach(fileNode => {
-                if (fileNode.type === 'file') {
-                  // Check if this file is highlighted
-                  if (highlightedIndices.has(currentIndex)) {
-                    // Toggle selection for this file
-                    toggleFileSelection(fileNode);
-                  }
-                  currentIndex++;
-                }
-              });
             });
           } else {
             // In normal mode, use the flattened tree
@@ -596,6 +581,7 @@ async function start(options) {
           // Exit search mode and restore the original tree
           isSearchActive = false;
           searchResults = [];
+          searchListToNodeMap = []; // Clear the search list to node map
           renderTree(treeBox, originalTree);
           updateStatus(statusBox, false, false, templateSelectBox);
           screen.render();
@@ -976,9 +962,31 @@ async function start(options) {
       screen.key(['up', 'down', 'left', 'right'], () => {
         // Only clear multi-selection when treeBox has focus
         if (activeBox === 'treeBox') {
+          // Check if highlighting was active before clearing
+          const wasHighlighting = highlightedIndices.size > 0;
+
           // Clear multi-selection state when navigating without shift
           multiSelectStartIndex = -1;
           highlightedIndices.clear();
+
+          // If highlighting was just active, force a re-render without highlights
+          if (wasHighlighting) {
+            const currentSelection = treeBox.selected; // Preserve selection
+            if (isSearchActive) {
+              // Use the non-highlighted search display function
+              displaySearchResults(treeBox, searchResults, true);
+            } else {
+              // Use the standard tree render function
+              renderTree(treeBox, directoryTree);
+            }
+            // Restore selection as render might reset it
+            if (currentSelection < treeBox.items.length) {
+              treeBox.select(currentSelection);
+            }
+            // Ensure focus remains
+            treeBox.focus();
+            screen.render();
+          }
         }
       });
 
@@ -1499,6 +1507,9 @@ function displaySearchResults(box, results, preserveSelection = false) {
   // Store the search results
   searchResults = results;
 
+  // Clear the search list to node map
+  searchListToNodeMap = [];
+
   if (results.length === 0) {
     // No results found, show a message
     box.setItems(['No search results found']);
@@ -1583,6 +1594,9 @@ function displaySearchResults(box, results, preserveSelection = false) {
           items.push(`${dirBranches}${dirPrefix}${selected}${formattedPath}`);
         }
 
+        // Add the directory node to the map
+        searchListToNodeMap.push(dirNode || null);
+
         // Add the files in this directory
         const files = groupedResults[relativePath];
         if (files && files.length > 0) {
@@ -1610,21 +1624,30 @@ function displaySearchResults(box, results, preserveSelection = false) {
                 } else {
                   items.push(`${fileBranch}${filePrefix}${selected}${formattedPath}`);
                 }
+
+                // Add the file node to the map
+                searchListToNodeMap.push(fileNode);
               }
             } catch (fileError) {
               console.error('Error processing file:', fileError);
               items.push(`Error: ${fileNode ? fileNode.relativePath || 'unknown file' : 'null file'}`);
+              // Add null to the map for error cases
+              searchListToNodeMap.push(null);
             }
           });
         }
       } catch (dirError) {
         console.error('Error processing directory:', dirError);
         items.push(`Error: ${relativePath || 'unknown directory'}`);
+        // Add null to the map for error cases
+        searchListToNodeMap.push(null);
       }
     });
   } catch (error) {
     console.error('Error building display items:', error);
     items.push('Error building display items: ' + error.message);
+    // Add null to the map for error cases
+    searchListToNodeMap.push(null);
   }
 
   // Set the items in the list
@@ -1803,6 +1826,9 @@ function displaySearchResultsWithHighlights(box, results, preserveSelection = fa
   // Store the current selection position if we need to preserve it
   const currentSelection = preserveSelection ? box.selected : 0;
 
+  // Clear the search list to node map
+  searchListToNodeMap = [];
+
   // Use the existing groupedResults if available, otherwise create a new one
   if (Object.keys(groupedResults).length === 0) {
     // Group results by directory for better organization
@@ -1890,6 +1916,8 @@ function displaySearchResultsWithHighlights(box, results, preserveSelection = fa
           dirContent = `{yellow-bg}${dirContent}{/yellow-bg}`;
         }
 
+        // Add the directory node to the map
+        searchListToNodeMap.push(dirNode || null);
         items.push(dirContent);
 
         // Add the files in this directory
@@ -1926,22 +1954,30 @@ function displaySearchResultsWithHighlights(box, results, preserveSelection = fa
                   fileContent = `{yellow-bg}${fileContent}{/yellow-bg}`;
                 }
 
+                // Add the file node to the map
+                searchListToNodeMap.push(fileNode);
                 items.push(fileContent);
               }
             } catch (fileError) {
               console.error('Error processing file:', fileError);
               items.push(`Error: ${fileNode ? fileNode.relativePath || 'unknown file' : 'null file'}`);
+              // Add null to the map for error cases
+              searchListToNodeMap.push(null);
             }
           });
         }
       } catch (dirError) {
         console.error('Error processing directory:', dirError);
         items.push(`Error: ${relativePath || 'unknown directory'}`);
+        // Add null to the map for error cases
+        searchListToNodeMap.push(null);
       }
     });
   } catch (error) {
     console.error('Error building display items:', error);
     items.push('Error building display items: ' + error.message);
+    // Add null to the map for error cases
+    searchListToNodeMap.push(null);
   }
 
   // Set the items in the list
