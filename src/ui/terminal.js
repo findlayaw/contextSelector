@@ -1008,11 +1008,18 @@ async function start(options) {
         // Get the selected file
         const selectedIndex = infoBox.selected;
         if (selectedIndex >= 0 && selectedIndex < selectedFiles.length) {
+          // Calculate the new selection position after removal
+          // If we're removing the last item, select the new last item
+          // Otherwise, keep the same index
+          const newSelectionIndex = (selectedIndex === selectedFiles.length - 1)
+            ? Math.max(0, selectedIndex - 1)
+            : selectedIndex;
+
           // Remove the file from selectedFiles
           selectedFiles.splice(selectedIndex, 1);
 
-          // Update UI
-          updateSelectedFiles(infoBox);
+          // Update UI with preserved selection position
+          updateSelectedFilesWithSelection(infoBox, newSelectionIndex);
           updateTokenCount();
           updateStatus(statusBox, isSearchActive, false, templateSelectBox);
 
@@ -1371,6 +1378,17 @@ function isFileSelected(node) {
  * @param {Object} box - Blessed list to update
  */
 function updateSelectedFiles(box) {
+  // Use the current selection as the default
+  const currentSelection = box.selected || 0;
+  updateSelectedFilesWithSelection(box, currentSelection);
+}
+
+/**
+ * Update the selected files display with a specific selection position
+ * @param {Object} box - Blessed list to update
+ * @param {number} selectionIndex - Index to select after updating
+ */
+function updateSelectedFilesWithSelection(box, selectionIndex) {
   let items = [];
 
   if (selectedFiles.length === 0) {
@@ -1379,24 +1397,18 @@ function updateSelectedFiles(box) {
     items = selectedFiles.map(file => file.relativePath);
   }
 
-  // Store the current selection position if we need to preserve it
-  const currentSelection = box.selected || 0;
-
   // Set the items in the list
   box.setItems(items);
 
-  // Restore the selection position if possible
-  if (currentSelection < items.length) {
-    box.select(currentSelection);
-  } else if (items.length > 0) {
-    box.select(0);
-  }
-
-  // Calculate the scroll position to maintain padding at the top
+  // Set the selection position
   if (items.length > 0) {
-    const selectedIndex = box.selected;
+    // Ensure the selection index is within bounds
+    const validIndex = Math.min(Math.max(0, selectionIndex), items.length - 1);
+    box.select(validIndex);
+
+    // Calculate the scroll position to maintain padding at the top
     const paddingLines = 3; // Number of lines to show above the selected item
-    const scrollPosition = Math.max(0, selectedIndex - paddingLines);
+    const scrollPosition = Math.max(0, validIndex - paddingLines);
 
     // Scroll to the calculated position
     box.scrollTo(scrollPosition);
