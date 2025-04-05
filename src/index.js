@@ -36,7 +36,9 @@ async function run(options) {
 
       // Save template if requested
       if (result.saveTemplate) {
-        await templateManager.saveTemplate(result.saveTemplate, result.selectedFiles);
+        // Use the template files snapshot if available, otherwise use the current selected files
+        const filesToSave = result.templateFiles || result.selectedFiles;
+        await templateManager.saveTemplate(result.saveTemplate, filesToSave);
         console.log(`Saved selection as template: ${result.saveTemplate}`);
       }
     } else {

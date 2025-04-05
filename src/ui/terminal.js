@@ -18,6 +18,11 @@ let isSearchActive = false;
 let searchResults = [];
 let originalTree = null;
 
+// Store template to save
+let templateToSave = null;
+// Store files to be saved in the template (snapshot at time of saving)
+let templateFiles = [];
+
 /**
  * Start the terminal UI
  * @param {Object} options - UI options
@@ -209,7 +214,7 @@ async function start(options) {
       // Handle key events
       screen.key(['q', 'C-c'], () => {
         screen.destroy();
-        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0 });
+        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null });
       });
 
       screen.key('enter', () => {
@@ -310,7 +315,8 @@ async function start(options) {
             selectedFiles,
             directoryTree,
             tokenCount,
-            saveTemplate: null
+            saveTemplate: templateToSave,
+            templateFiles: templateFiles.length > 0 ? templateFiles : null
           });
         }
       });
@@ -349,7 +355,7 @@ async function start(options) {
         } else {
           // Regular escape behavior (quit)
           screen.destroy();
-          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0 });
+          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null });
         }
       });
 
@@ -366,13 +372,14 @@ async function start(options) {
         treeBox.focus();
 
         if (templateName) {
-          screen.destroy();
-          resolve({
-            selectedFiles,
-            directoryTree,
-            tokenCount,
-            saveTemplate: templateName
-          });
+          // Save the template name and take a snapshot of currently selected files
+          templateToSave = templateName;
+          // Create a deep copy of the selected files to save in the template
+          templateFiles = JSON.parse(JSON.stringify(selectedFiles));
+
+          // Show a notification that the template will be saved
+          statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + updateStatus(statusBox, isSearchActive, true));
+          screen.render();
         } else {
           screen.render();
         }
@@ -699,11 +706,14 @@ function updateTokenCount() {
  * Update the status display
  * @param {Object} box - Blessed box to update
  * @param {boolean} isSearchMode - Whether we're in search mode
+ * @param {boolean} returnContentOnly - Whether to return the content string instead of updating the box
+ * @returns {string|undefined} - Status content if returnContentOnly is true
  */
-function updateStatus(box, isSearchMode = false) {
+function updateStatus(box, isSearchMode = false, returnContentOnly = false) {
   const content = [
     `Selected: ${selectedFiles.length} files`,
     `Tokens: ${tokenCount}`,
+    templateToSave ? `Template to save: ${templateToSave}` : '',
     '',
     'Controls:',
     '  ↑/↓: Navigate',
@@ -715,7 +725,11 @@ function updateStatus(box, isSearchMode = false) {
     '  s: Save template',
     '  c: Copy to clipboard and exit',
     '  q: Quit without copying'
-  ].join('\n');
+  ].filter(line => line !== '').join('\n');
+
+  if (returnContentOnly) {
+    return content;
+  }
 
   box.setContent(content);
 }
