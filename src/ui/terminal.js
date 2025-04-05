@@ -290,7 +290,9 @@ async function start(options) {
       });
 
       screen.key('/', () => {
+        // Ensure the search box is properly shown
         searchBox.hidden = false;
+        searchBox.show();
         searchBox.focus();
         screen.render();
       });
@@ -302,7 +304,9 @@ async function start(options) {
 
       screen.key('s', () => {
         if (selectedFiles.length > 0) {
+          // Ensure the template name box is properly shown
           templateNameBox.hidden = false;
+          templateNameBox.show();
           templateNameBox.focus();
           screen.render();
         }
@@ -323,13 +327,19 @@ async function start(options) {
 
       // Handle search box events
       searchBox.key(['escape', 'C-c'], () => {
+        // Ensure the search box is completely hidden
+        searchBox.hide();
         searchBox.hidden = true;
         treeBox.focus();
+        // Force a complete redraw of the screen
+        screen.clearRegion(0, screen.width, 0, screen.height);
         screen.render();
       });
 
       searchBox.key('enter', () => {
         const query = searchBox.getValue();
+        // Ensure the search box is completely hidden
+        searchBox.hide();
         searchBox.hidden = true;
         treeBox.focus();
 
@@ -340,6 +350,8 @@ async function start(options) {
           updateStatus(statusBox, true);
         }
 
+        // Force a complete redraw of the screen
+        screen.clearRegion(0, screen.width, 0, screen.height);
         screen.render();
       });
 
@@ -361,13 +373,19 @@ async function start(options) {
 
       // Handle template name box events
       templateNameBox.key(['escape', 'C-c'], () => {
+        // Ensure the template name box is completely hidden
+        templateNameBox.hide();
         templateNameBox.hidden = true;
         treeBox.focus();
+        // Force a complete redraw of the screen
+        screen.clearRegion(0, screen.width, 0, screen.height);
         screen.render();
       });
 
       templateNameBox.key('enter', () => {
         const templateName = templateNameBox.getValue();
+        // Ensure the template name box is completely hidden
+        templateNameBox.hide();
         templateNameBox.hidden = true;
         treeBox.focus();
 
@@ -379,21 +397,31 @@ async function start(options) {
 
           // Show a notification that the template will be saved
           statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + updateStatus(statusBox, isSearchActive, true));
+          // Force a complete redraw of the screen
+          screen.clearRegion(0, screen.width, 0, screen.height);
           screen.render();
         } else {
+          // Force a complete redraw of the screen
+          screen.clearRegion(0, screen.width, 0, screen.height);
           screen.render();
         }
       });
 
       // Handle template selection box events
       templateSelectBox.key(['escape', 'C-c'], () => {
+        // Ensure the template selection box is completely hidden
+        templateSelectBox.hide();
         templateSelectBox.hidden = true;
         treeBox.focus();
+        // Force a complete redraw of the screen
+        screen.clearRegion(0, screen.width, 0, screen.height);
         screen.render();
       });
 
       templateSelectBox.on('select', async (item) => {
         const templateName = item.content;
+        // Ensure the template selection box is completely hidden
+        templateSelectBox.hide();
         templateSelectBox.hidden = true;
         treeBox.focus();
 
@@ -407,6 +435,8 @@ async function start(options) {
           renderTree(treeBox, directoryTree);
         }
 
+        // Force a complete redraw of the screen
+        screen.clearRegion(0, screen.width, 0, screen.height);
         screen.render();
       });
 
@@ -798,7 +828,9 @@ async function showTemplateSelection(box) {
     box.setItems(templates);
   }
 
+  // Ensure the box is properly shown
   box.hidden = false;
+  box.show();
   box.focus();
 }
 
