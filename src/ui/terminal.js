@@ -606,11 +606,14 @@ function renderTree(box, tree) {
     // Use relativePath instead of just name
     const displayPath = node.relativePath + (node.type === 'directory' ? '\\' : '');
 
+    // Format the path with the rightmost part in bold
+    const formattedPath = formatPathWithBoldRightmost(displayPath);
+
     // If the node is selected, wrap the checkmark with color tags
     if (isFileSelected(node)) {
-      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${displayPath}`;
+      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${formattedPath}`;
     } else {
-      return `${indent}${prefix}${selected}${displayPath}`;
+      return `${indent}${prefix}${selected}${formattedPath}`;
     }
   });
 
@@ -963,11 +966,14 @@ function displaySearchResults(box, results, preserveSelection = false) {
       const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
       const displayPath = relativePath + '\\';
 
+      // Format the path with the rightmost part in bold
+      const formattedPath = formatPathWithBoldRightmost(displayPath);
+
       // If the directory is selected, wrap the checkmark with color tags
       if (isFileSelected(dirNode)) {
-        items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
+        items.push(`${prefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
       } else {
-        items.push(`${prefix}${selected}${displayPath}`);
+        items.push(`${prefix}${selected}${formattedPath}`);
       }
     }
 
@@ -980,11 +986,14 @@ function displaySearchResults(box, results, preserveSelection = false) {
           const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
           const displayPath = fileNode.relativePath;
 
+          // Format the path with the rightmost part in bold
+          const formattedPath = formatPathWithBoldRightmost(displayPath);
+
           // If the file is selected, wrap the checkmark with color tags
           if (isFileSelected(fileNode)) {
-            items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
+            items.push(`${prefix}{green-fg}${selected}{/green-fg}${formattedPath}`);
           } else {
-            items.push(`${prefix}${selected}${displayPath}`);
+            items.push(`${prefix}${selected}${formattedPath}`);
           }
         }
       });
@@ -1056,6 +1065,38 @@ function showConfirmationDialog(box, message, callback) {
 
   // Add the key event handler
   box.screen.key(['y', 'n'], onKey);
+}
+
+/**
+ * Format a path with the rightmost part in bold
+ * @param {string} displayPath - Path to format
+ * @returns {string} - Formatted path with rightmost part in bold
+ */
+function formatPathWithBoldRightmost(displayPath) {
+  if (!displayPath) return '';
+
+  // For directory paths ending with '\', we need to handle them specially
+  const isDirectory = displayPath.endsWith('\\');
+
+  // Remove trailing backslash for processing if it's a directory
+  const processPath = isDirectory ? displayPath.slice(0, -1) : displayPath;
+
+  // Find the last backslash to determine the rightmost part
+  const lastBackslashIndex = processPath.lastIndexOf('\\');
+
+  if (lastBackslashIndex === -1) {
+    // No backslash found, the entire path is the rightmost part
+    return `{bold}${displayPath}{/bold}`;
+  } else {
+    // Split the path into prefix and rightmost part
+    const prefix = processPath.substring(0, lastBackslashIndex + 1);
+    const rightmost = processPath.substring(lastBackslashIndex + 1);
+
+    // Add the trailing backslash to the rightmost part if it's a directory
+    const formattedRightmost = isDirectory ? `{bold}${rightmost}\\{/bold}` : `{bold}${rightmost}{/bold}`;
+
+    return prefix + formattedRightmost;
+  }
 }
 
 module.exports = { start };
