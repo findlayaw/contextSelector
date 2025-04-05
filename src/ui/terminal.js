@@ -42,7 +42,7 @@ async function start(options) {
         top: 0,
         left: 0,
         width: '70%',
-        height: '77%',
+        height: '70%',
         border: {
           type: 'line'
         },
@@ -76,7 +76,7 @@ async function start(options) {
         top: 0,
         right: 0,
         width: '30%',
-        height: '77%',
+        height: '70%',
         border: {
           type: 'line'
         },
@@ -97,10 +97,10 @@ async function start(options) {
 
       // Create the status box
       const statusBox = blessed.box({
-        bottom: 0,
+        top: '70%', // Position directly below the file explorer/selected files
         left: 0,
         width: '100%',
-        height: '23%',  // Adjusted height to show all controls without extra space
+        height: '30%', // Significantly increased height to ensure all controls are visible
         border: {
           type: 'line'
         },
@@ -741,12 +741,13 @@ function updateTokenCount() {
  * @returns {string|undefined} - Status content if returnContentOnly is true
  */
 function updateStatus(box, isSearchMode = false, returnContentOnly = false) {
-  // Create a very compact status display to ensure all controls are visible
+  // Create a status display with all controls visible and key information in bold
   const content = [
-    `Selected: ${selectedFiles.length} files | Tokens: ${tokenCount}` + (templateToSave ? ` | Template to save: ${templateToSave}` : ''),
+    `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` + (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : ''),
     '{bold}Controls:{/bold}',
-    '  {bold}↑/↓:{/bold} Navigate | {bold}Enter:{/bold} Expand/collapse | {bold}Space:{/bold} Toggle selection | {bold}/{/bold}: Search',
-    '  {bold}Escape:{/bold} ' + (isSearchMode ? 'Exit search' : 'Quit') + ' | {bold}t:{/bold} Load template | {bold}s:{/bold} Save template | {bold}c:{/bold} Copy | {bold}q:{/bold} Quit'
+    '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}Enter:{/bold} Expand/collapse    {bold}Space:{/bold} Toggle selection',
+    '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template',
+    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q/Esc:{/bold} ' + (isSearchMode ? 'Exit search' : 'Quit')
   ].filter(line => line !== '').join('\n');
 
   if (returnContentOnly) {
