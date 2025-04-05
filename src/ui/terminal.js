@@ -213,34 +213,23 @@ async function start(options) {
         if (!node) return;
 
         if (isSearchActive) {
-          // In search mode, enter selects the search result
+          // In search mode, enter only handles directory navigation
           const selectedResult = searchResults[treeBox.selected];
-          if (selectedResult) {
-            if (selectedResult.type === 'directory') {
-              // Exit search mode and navigate to the directory
-              isSearchActive = false;
-              searchResults = [];
-              renderTree(treeBox, originalTree);
+          if (selectedResult && selectedResult.type === 'directory') {
+            // Exit search mode and navigate to the directory
+            isSearchActive = false;
+            searchResults = [];
+            renderTree(treeBox, originalTree);
 
-              // Expand the directory and all its parents
-              let currentPath = selectedResult.path;
-              while (currentPath !== directoryTree.path) {
-                expandedDirs.add(currentPath);
-                currentPath = path.dirname(currentPath);
-              }
-
-              renderTree(treeBox, originalTree);
-              updateStatus(statusBox);
-            } else if (selectedResult.type === 'file') {
-              // Toggle selection for the file
-              toggleFileSelection(selectedResult);
-              updateSelectedFiles(infoBox);
-              updateTokenCount();
-              updateStatus(statusBox, true);
-
-              // Update the display to show the selection
-              displaySearchResults(treeBox, searchResults);
+            // Expand the directory and all its parents
+            let currentPath = selectedResult.path;
+            while (currentPath !== directoryTree.path) {
+              expandedDirs.add(currentPath);
+              currentPath = path.dirname(currentPath);
             }
+
+            renderTree(treeBox, originalTree);
+            updateStatus(statusBox);
           }
         } else {
           // Normal mode - toggle directory expansion
@@ -253,24 +242,33 @@ async function start(options) {
       });
 
       screen.key('space', () => {
-        const node = getCurrentNode(treeBox);
-        if (!node) return;
+        if (isSearchActive) {
+          // In search mode, get the selected result
+          const selectedResult = searchResults[treeBox.selected];
+          if (selectedResult && selectedResult.type === 'file') {
+            // Toggle selection for the file
+            toggleFileSelection(selectedResult);
+            updateSelectedFiles(infoBox);
+            updateTokenCount();
+            updateStatus(statusBox, true);
 
-        if (node.type === 'file') {
-          toggleFileSelection(node);
-          updateSelectedFiles(infoBox);
-          updateTokenCount();
-
-          if (isSearchActive) {
-            // Update the search results display
+            // Update the display to show the selection
             displaySearchResults(treeBox, searchResults);
-          } else {
-            // Update the normal tree display
-            renderTree(treeBox, directoryTree);
-            updateStatus(statusBox);
+            screen.render();
           }
+        } else {
+          // Normal mode
+          const node = getCurrentNode(treeBox);
+          if (!node) return;
 
-          screen.render();
+          if (node.type === 'file') {
+            toggleFileSelection(node);
+            updateSelectedFiles(infoBox);
+            updateTokenCount();
+            updateStatus(statusBox);
+            renderTree(treeBox, directoryTree);
+            screen.render();
+          }
         }
       });
 
@@ -554,11 +552,11 @@ function updateSelectedFiles(box) {
 /**
  * Update the token count
  */
-async function updateTokenCount() {
+function updateTokenCount() {
   tokenCount = 0;
 
   for (const file of selectedFiles) {
-    const content = await fileSystem.readFileContent(file.path);
+    const content = fileSystem.readFileContent(file.path);
     tokenCount += tokenCounter.countTokens(content);
   }
 }
@@ -575,7 +573,7 @@ function updateStatus(box, isSearchMode = false) {
     '',
     'Controls:',
     '  ↑/↓: Navigate',
-    '  Enter: ' + (isSearchMode ? 'Select search result' : 'Expand/collapse directory'),
+    '  Enter: Expand/collapse directory',
     '  Space: Select/deselect file',
     '  /: Search',
     '  Escape: ' + (isSearchMode ? 'Exit search mode' : 'Quit'),
@@ -611,7 +609,6 @@ function displaySearchResults(box, results) {
 
   // Create a virtual tree with just the search results
   const items = results.map(node => {
-    const level = 0; // All results at the same level for simplicity
     const prefix = node.type === 'directory' ? '▶ ' : '  ';
     const selected = isFileSelected(node) ? '✓ ' : '  ';
     const name = node.name + (node.type === 'directory' ? '/' : '');
