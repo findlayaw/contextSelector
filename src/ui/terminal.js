@@ -1,5 +1,6 @@
 const blessed = require('blessed');
 const path = require('path');
+const fs = require('fs');
 const fileSystem = require('../simpleFileSystem');
 const search = require('../utils/search');
 const tokenCounter = require('../utils/tokenCounter');
@@ -227,7 +228,32 @@ async function start(options) {
       if (options.template) {
         const template = await templateManager.loadTemplate(options.template);
         if (template && template.files) {
-          selectedFiles = template.files;
+          // Check if each file in the template exists
+          const validSelectedFiles = [];
+          const missingFiles = [];
+
+          for (const fileFromTemplate of template.files) {
+            // Check if the file path stored in the template actually exists
+            if (fs.existsSync(fileFromTemplate.path)) {
+              validSelectedFiles.push(fileFromTemplate);
+            } else {
+              // Keep track of files that couldn't be found
+              missingFiles.push(fileFromTemplate.relativePath || fileFromTemplate.path);
+            }
+          }
+
+          selectedFiles = validSelectedFiles; // Assign only the files that were found
+
+          // Notify the user if some files were missing
+          if (missingFiles.length > 0) {
+            const missingFilesList = missingFiles.join('\n  - ');
+            // Temporarily show a message in the status box
+            statusBox.setContent(`{yellow-fg}Warning: The following files from the template were not found and were skipped:{/yellow-fg}\n  - ${missingFilesList}\n\n(Loading remaining files...)`);
+            screen.render(); // Render the temporary message
+            // Wait a bit before showing the final status update
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Show warning for 3 seconds
+          }
+
           updateSelectedFiles(infoBox);
           updateTokenCount();
           updateStatus(statusBox, false, false, templateSelectBox);
@@ -692,7 +718,32 @@ async function start(options) {
 
         const template = await templateManager.loadTemplate(templateName);
         if (template && template.files) {
-          selectedFiles = template.files;
+          // Check if each file in the template exists
+          const validSelectedFiles = [];
+          const missingFiles = [];
+
+          for (const fileFromTemplate of template.files) {
+            // Check if the file path stored in the template actually exists
+            if (fs.existsSync(fileFromTemplate.path)) {
+              validSelectedFiles.push(fileFromTemplate);
+            } else {
+              // Keep track of files that couldn't be found
+              missingFiles.push(fileFromTemplate.relativePath || fileFromTemplate.path);
+            }
+          }
+
+          selectedFiles = validSelectedFiles; // Assign only the files that were found
+
+          // Notify the user if some files were missing
+          if (missingFiles.length > 0) {
+            const missingFilesList = missingFiles.join('\n  - ');
+            // Temporarily show a message in the status box
+            statusBox.setContent(`{yellow-fg}Warning: The following files from the template were not found and were skipped:{/yellow-fg}\n  - ${missingFilesList}\n\n(Loading remaining files...)`);
+            screen.render(); // Render the temporary message
+            // Wait a bit before showing the final status update
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Show warning for 3 seconds
+          }
+
           updateSelectedFiles(infoBox);
           updateTokenCount();
           updateStatus(statusBox, false, false, templateSelectBox);
