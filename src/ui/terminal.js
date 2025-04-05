@@ -235,21 +235,41 @@ async function start(options) {
       });
 
       screen.key('enter', () => {
-        const node = getCurrentNode(treeBox);
-        if (!node) return;
-
         if (isSearchActive) {
-          // In search mode, enter only handles directory navigation
-          const selectedResult = searchResults[treeBox.selected];
-          if (selectedResult && selectedResult.type === 'directory') {
+          // In search mode with our new grouped display
+          const selectedIndex = treeBox.selected;
+          const selectedItem = treeBox.getItem(selectedIndex);
+
+          if (!selectedItem) return;
+
+          // Parse the selected item to determine if it's a directory
+          const itemContent = selectedItem.content;
+
+          // Check if this is a directory (has the directory prefix '▶ ')
+          const isDirectory = itemContent.startsWith('▶ ');
+
+          if (!isDirectory) return; // Only directories can be expanded
+
+          // Extract the path from the gray text in parentheses
+          const pathMatch = itemContent.match(/\(([^)]+)\)/);
+          if (!pathMatch) return;
+
+          const itemPath = pathMatch[1];
+
+          // Find the corresponding directory node in our search results
+          const selectedNode = searchResults.find(node =>
+            node.type === 'directory' && node.relativePath === itemPath
+          );
+
+          if (selectedNode) {
             // Exit search mode and navigate to the directory
             isSearchActive = false;
             searchResults = [];
             renderTree(treeBox, originalTree);
 
             // Expand the directory and all its parents
-            let currentPath = selectedResult.path;
-            while (currentPath !== directoryTree.path) {
+            let currentPath = selectedNode.path;
+            while (currentPath && currentPath !== directoryTree.path) {
               expandedDirs.add(currentPath);
               currentPath = path.dirname(currentPath);
             }
@@ -259,6 +279,9 @@ async function start(options) {
           }
         } else {
           // Normal mode - toggle directory expansion
+          const node = getCurrentNode(treeBox);
+          if (!node) return;
+
           if (node.type === 'directory') {
             toggleDirectory(treeBox, node);
           }
@@ -269,24 +292,69 @@ async function start(options) {
 
       screen.key('space', () => {
         if (isSearchActive) {
-          // In search mode, get the selected result
-          const selectedResult = searchResults[treeBox.selected];
-          if (selectedResult) {
-            if (selectedResult.type === 'file') {
-              // Toggle selection for the file
-              toggleFileSelection(selectedResult);
-            } else if (selectedResult.type === 'directory') {
-              // Select all files in the directory
-              selectAllFilesInDirectory(selectedResult);
-            }
-            updateSelectedFiles(infoBox);
-            updateTokenCount();
-            updateStatus(statusBox, true, false, templateSelectBox);
+          // In search mode with our new grouped display
+          const selectedIndex = treeBox.selected;
+          const selectedItem = treeBox.getItem(selectedIndex);
 
-            // Update the display to show the selection, preserving the current selection position
-            displaySearchResults(treeBox, searchResults, true);
-            screen.render();
+          if (!selectedItem) return;
+
+          // Parse the selected item to determine if it's a directory or file
+          const itemContent = selectedItem.content;
+
+          // Check if this is a directory (has the directory prefix '▶ ')
+          const isDirectory = itemContent.startsWith('▶ ');
+
+          // Extract the path from the gray text in parentheses
+          const pathMatch = itemContent.match(/\(([^)]+)\)/);
+          if (!pathMatch) return;
+
+          const itemPath = pathMatch[1];
+
+          // Find the corresponding node in our search results
+          const selectedNode = searchResults.find(node => node.relativePath === itemPath);
+
+          // If we couldn't find an exact match, try to find by partial path
+          if (!selectedNode) {
+            // For files, the path might be in a different format
+            const possibleNodes = searchResults.filter(node =>
+              itemContent.includes(node.name) &&
+              (isDirectory ? node.type === 'directory' : node.type === 'file')
+            );
+
+            if (possibleNodes.length === 1) {
+              // We found a unique match
+              if (possibleNodes[0].type === 'file') {
+                toggleFileSelection(possibleNodes[0]);
+              } else if (possibleNodes[0].type === 'directory') {
+                selectAllFilesInDirectory(possibleNodes[0]);
+              }
+            } else if (possibleNodes.length > 1) {
+              // Multiple matches, try to find the best one
+              const bestMatch = possibleNodes.find(node => node.relativePath === itemPath);
+              if (bestMatch) {
+                if (bestMatch.type === 'file') {
+                  toggleFileSelection(bestMatch);
+                } else if (bestMatch.type === 'directory') {
+                  selectAllFilesInDirectory(bestMatch);
+                }
+              }
+            }
+          } else {
+            // We found an exact match
+            if (selectedNode.type === 'file') {
+              toggleFileSelection(selectedNode);
+            } else if (selectedNode.type === 'directory') {
+              selectAllFilesInDirectory(selectedNode);
+            }
           }
+
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox, true, false, templateSelectBox);
+
+          // Update the display to show the selection, preserving the current selection position
+          displaySearchResults(treeBox, searchResults, true);
+          screen.render();
         } else {
           // Normal mode
           const node = getCurrentNode(treeBox);
@@ -852,18 +920,76 @@ function displaySearchResults(box, results, preserveSelection = false) {
     return;
   }
 
-  // Create a virtual tree with just the search results
-  const items = results.map(node => {
-    const prefix = node.type === 'directory' ? '▶ ' : '  ';
-    const selected = isFileSelected(node) ? '✓ ' : '  ';
-    const name = node.name + (node.type === 'directory' ? '/' : '');
-    const path = node.relativePath;
+  // Group results by directory for better organization
+  const groupedResults = {};
 
-    // If the node is selected, wrap the checkmark with color tags
-    if (isFileSelected(node)) {
-      return `${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${path}){/gray-fg}`;
-    } else {
-      return `${prefix}${selected}${name} {gray-fg}(${path}){/gray-fg}`;
+  // First pass: collect all directories
+  results.forEach(node => {
+    if (node.type === 'directory') {
+      groupedResults[node.relativePath] = [];
+    }
+  });
+
+  // Second pass: assign files to their directories or create standalone entries
+  results.forEach(node => {
+    if (node.type === 'file') {
+      const dirPath = path.dirname(node.relativePath);
+      if (groupedResults[dirPath]) {
+        // This file belongs to a directory that's in our results
+        groupedResults[dirPath].push(node);
+      } else {
+        // Standalone file or belongs to a directory not in results
+        // Use the file's path as the key
+        groupedResults[node.relativePath] = [node];
+      }
+    }
+  });
+
+  // Create a virtual tree with just the search results
+  const items = [];
+
+  // Sort the keys (paths) to maintain directory structure
+  const sortedPaths = Object.keys(groupedResults).sort((a, b) => a.localeCompare(b));
+
+  // Build the display items
+  sortedPaths.forEach(relativePath => {
+    // Find the directory node if it exists
+    const dirNode = results.find(node =>
+      node.type === 'directory' && node.relativePath === relativePath
+    );
+
+    if (dirNode) {
+      // Add the directory entry
+      const prefix = '▶ ';
+      const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
+      const name = dirNode.name + '/';
+
+      // If the directory is selected, wrap the checkmark with color tags
+      if (isFileSelected(dirNode)) {
+        items.push(`${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${relativePath}){/gray-fg}`);
+      } else {
+        items.push(`${prefix}${selected}${name} {gray-fg}(${relativePath}){/gray-fg}`);
+      }
+    }
+
+    // Add the files in this directory
+    const files = groupedResults[relativePath];
+    if (files && files.length > 0) {
+      files.forEach(fileNode => {
+        if (fileNode.type === 'file') {
+          const prefix = '  ';
+          const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
+          const name = fileNode.name;
+          const filePath = fileNode.relativePath;
+
+          // If the file is selected, wrap the checkmark with color tags
+          if (isFileSelected(fileNode)) {
+            items.push(`${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${filePath}){/gray-fg}`);
+          } else {
+            items.push(`${prefix}${selected}${name} {gray-fg}(${filePath}){/gray-fg}`);
+          }
+        }
+      });
     }
   });
 
