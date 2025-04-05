@@ -42,7 +42,7 @@ async function start(options) {
         top: 0,
         left: 0,
         width: '70%',
-        height: '80%',
+        height: '77%',
         border: {
           type: 'line'
         },
@@ -76,7 +76,7 @@ async function start(options) {
         top: 0,
         right: 0,
         width: '30%',
-        height: '80%',
+        height: '77%',
         border: {
           type: 'line'
         },
@@ -100,13 +100,14 @@ async function start(options) {
         bottom: 0,
         left: 0,
         width: '100%',
-        height: '20%',
+        height: '23%',  // Adjusted height to show all controls without extra space
         border: {
           type: 'line'
         },
         label: ' Status ',
         content: 'Loading...',
-        tags: true
+        tags: true,
+        scrollable: true  // Added scrollable property to ensure all content is accessible
       });
 
       // Create the search box
@@ -740,21 +741,12 @@ function updateTokenCount() {
  * @returns {string|undefined} - Status content if returnContentOnly is true
  */
 function updateStatus(box, isSearchMode = false, returnContentOnly = false) {
+  // Create a very compact status display to ensure all controls are visible
   const content = [
-    `Selected: ${selectedFiles.length} files`,
-    `Tokens: ${tokenCount}`,
-    templateToSave ? `Template to save: ${templateToSave}` : '',
-    '',
-    'Controls:',
-    '  ↑/↓: Navigate',
-    '  Enter: Expand/collapse directory',
-    '  Space: Toggle selection of file or all files in directory',
-    '  /: Search',
-    '  Escape: ' + (isSearchMode ? 'Exit search mode' : 'Quit'),
-    '  t: Load template',
-    '  s: Save template',
-    '  c: Copy to clipboard and exit',
-    '  q: Quit without copying'
+    `Selected: ${selectedFiles.length} files | Tokens: ${tokenCount}` + (templateToSave ? ` | Template to save: ${templateToSave}` : ''),
+    '{bold}Controls:{/bold}',
+    '  {bold}↑/↓:{/bold} Navigate | {bold}Enter:{/bold} Expand/collapse | {bold}Space:{/bold} Toggle selection | {bold}/{/bold}: Search',
+    '  {bold}Escape:{/bold} ' + (isSearchMode ? 'Exit search' : 'Quit') + ' | {bold}t:{/bold} Load template | {bold}s:{/bold} Save template | {bold}c:{/bold} Copy | {bold}q:{/bold} Quit'
   ].filter(line => line !== '').join('\n');
 
   if (returnContentOnly) {
