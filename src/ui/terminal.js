@@ -250,11 +250,10 @@ async function start(options) {
 
           if (!isDirectory) return; // Only directories can be expanded
 
-          // Extract the path from the gray text in parentheses
-          const pathMatch = itemContent.match(/\(([^)]+)\)/);
-          if (!pathMatch) return;
-
-          const itemPath = pathMatch[1];
+          // Extract the path directly from the content
+          // Remove the prefix and any selection indicator
+          const itemPath = itemContent.replace(/^\s*▶\s*(?:✓\s*)?/, '').replace(/\\$/, '');
+          if (!itemPath) return;
 
           // Find the corresponding directory node in our search results
           const selectedNode = searchResults.find(node =>
@@ -304,11 +303,10 @@ async function start(options) {
           // Check if this is a directory (has the directory prefix '▶ ')
           const isDirectory = itemContent.startsWith('▶ ');
 
-          // Extract the path from the gray text in parentheses
-          const pathMatch = itemContent.match(/\(([^)]+)\)/);
-          if (!pathMatch) return;
-
-          const itemPath = pathMatch[1];
+          // Extract the path directly from the content
+          // Remove the prefix and any selection indicator
+          const itemPath = itemContent.replace(/^\s*(?:▶|▼)\s*(?:✓\s*)?/, '').replace(/\\$/, '');
+          if (!itemPath) return;
 
           // Find the corresponding node in our search results
           const selectedNode = searchResults.find(node => node.relativePath === itemPath);
@@ -605,13 +603,14 @@ function renderTree(box, tree) {
     const prefix = node.type === 'directory' ? (isExpanded ? '▼ ' : '▶ ') : '  ';
     // Use a different approach for coloring
     const selected = isFileSelected(node) ? '✓ ' : '  ';
-    const name = node.name + (node.type === 'directory' ? '/' : '');
+    // Use relativePath instead of just name
+    const displayPath = node.relativePath + (node.type === 'directory' ? '\\' : '');
 
     // If the node is selected, wrap the checkmark with color tags
     if (isFileSelected(node)) {
-      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${name}`;
+      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${displayPath}`;
     } else {
-      return `${indent}${prefix}${selected}${name}`;
+      return `${indent}${prefix}${selected}${displayPath}`;
     }
   });
 
@@ -962,13 +961,13 @@ function displaySearchResults(box, results, preserveSelection = false) {
       // Add the directory entry
       const prefix = '▶ ';
       const selected = isFileSelected(dirNode) ? '✓ ' : '  ';
-      const name = dirNode.name + '/';
+      const displayPath = relativePath + '\\';
 
       // If the directory is selected, wrap the checkmark with color tags
       if (isFileSelected(dirNode)) {
-        items.push(`${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${relativePath}){/gray-fg}`);
+        items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
       } else {
-        items.push(`${prefix}${selected}${name} {gray-fg}(${relativePath}){/gray-fg}`);
+        items.push(`${prefix}${selected}${displayPath}`);
       }
     }
 
@@ -979,14 +978,13 @@ function displaySearchResults(box, results, preserveSelection = false) {
         if (fileNode.type === 'file') {
           const prefix = '  ';
           const selected = isFileSelected(fileNode) ? '✓ ' : '  ';
-          const name = fileNode.name;
-          const filePath = fileNode.relativePath;
+          const displayPath = fileNode.relativePath;
 
           // If the file is selected, wrap the checkmark with color tags
           if (isFileSelected(fileNode)) {
-            items.push(`${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${filePath}){/gray-fg}`);
+            items.push(`${prefix}{green-fg}${selected}{/green-fg}${displayPath}`);
           } else {
-            items.push(`${prefix}${selected}${name} {gray-fg}(${filePath}){/gray-fg}`);
+            items.push(`${prefix}${selected}${displayPath}`);
           }
         }
       });
