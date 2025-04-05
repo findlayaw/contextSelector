@@ -199,7 +199,9 @@ async function start(options) {
       // If a search query was specified, perform search
       if (options.searchQuery) {
         const results = search.searchFiles(directoryTree, options.searchQuery);
-        highlightSearchResults(treeBox, results);
+        // Initial search from options, don't preserve selection
+        displaySearchResults(treeBox, results, false);
+        updateStatus(statusBox, true);
       }
 
       // Handle key events
@@ -252,8 +254,8 @@ async function start(options) {
             updateTokenCount();
             updateStatus(statusBox, true);
 
-            // Update the display to show the selection
-            displaySearchResults(treeBox, searchResults);
+            // Update the display to show the selection, preserving the current selection position
+            displaySearchResults(treeBox, searchResults, true);
             screen.render();
           }
         } else {
@@ -317,7 +319,8 @@ async function start(options) {
 
         if (query) {
           const results = search.searchFiles(directoryTree, query);
-          displaySearchResults(treeBox, results);
+          // Initial display of search results, don't preserve selection
+          displaySearchResults(treeBox, results, false);
           updateStatus(statusBox, true);
         }
 
@@ -590,13 +593,17 @@ function updateStatus(box, isSearchMode = false) {
  * Display search results in the tree
  * @param {Object} box - Blessed box containing the tree
  * @param {Array} results - Search results to highlight
+ * @param {boolean} preserveSelection - Whether to preserve the current selection
  */
-function displaySearchResults(box, results) {
+function displaySearchResults(box, results, preserveSelection = false) {
   // Save the original tree if this is a new search
   if (!isSearchActive) {
     originalTree = directoryTree;
     isSearchActive = true;
   }
+
+  // Store the current selection position if we need to preserve it
+  const currentSelection = preserveSelection ? box.selected : 0;
 
   // Store the search results
   searchResults = results;
@@ -624,7 +631,13 @@ function displaySearchResults(box, results) {
 
   // Set the items in the list
   box.setItems(items);
-  box.select(0);
+
+  // Restore the selection position if preserving, otherwise select the first item
+  if (preserveSelection && currentSelection < items.length) {
+    box.select(currentSelection);
+  } else {
+    box.select(0);
+  }
 }
 
 /**
