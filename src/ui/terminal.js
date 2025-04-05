@@ -734,7 +734,8 @@ async function start(options) {
 
       // Add Vim-like navigation: h (left/parent directory)
       screen.key('h', () => {
-        if (isSearchActive) return; // Don't handle in search mode
+        // Only handle when treeBox has focus and not in search mode
+        if (activeBox !== 'treeBox' || isSearchActive) return;
 
         const node = getCurrentNode(treeBox);
         if (!node) return;
@@ -766,7 +767,8 @@ async function start(options) {
 
       // Add Vim-like navigation: l (right/expand directory)
       screen.key('l', () => {
-        if (isSearchActive) return; // Don't handle in search mode
+        // Only handle when treeBox has focus and not in search mode
+        if (activeBox !== 'treeBox' || isSearchActive) return;
 
         const node = getCurrentNode(treeBox);
         if (!node) return;
@@ -801,6 +803,8 @@ async function start(options) {
 
       // Add Vim-like navigation: g (jump to top)
       screen.key('g', () => {
+        // Only handle when treeBox has focus
+        if (activeBox !== 'treeBox') return;
         treeBox.select(0);
         treeBox.scrollTo(0);
         screen.render();
@@ -808,6 +812,8 @@ async function start(options) {
 
       // Add Vim-like navigation: G (jump to bottom)
       screen.key('G', () => {
+        // Only handle when treeBox has focus
+        if (activeBox !== 'treeBox') return;
         const lastIndex = treeBox.items.length - 1;
         treeBox.select(lastIndex);
 
@@ -821,6 +827,8 @@ async function start(options) {
 
       // Add 'a' key to toggle selection of all visible files
       screen.key('a', () => {
+        // Only handle when treeBox has focus
+        if (activeBox !== 'treeBox') return;
         if (isSearchActive) {
           // In search mode, toggle all visible files in search results
           const allSelected = searchResults.every(node => {
@@ -893,6 +901,9 @@ async function start(options) {
 
       // Add shift+arrow keys for multi-selection highlighting
       screen.key('S-up', () => {
+        // Only handle multi-selection when treeBox has focus
+        if (activeBox !== 'treeBox') return;
+
         if (treeBox.selected <= 0) return;
 
         // Initialize multi-selection if not started
@@ -926,6 +937,9 @@ async function start(options) {
       });
 
       screen.key('S-down', () => {
+        // Only handle multi-selection when treeBox has focus
+        if (activeBox !== 'treeBox') return;
+
         if (treeBox.selected >= treeBox.items.length - 1) return;
 
         // Initialize multi-selection if not started
@@ -960,9 +974,12 @@ async function start(options) {
 
       // Clear multi-selection when regular arrow keys are used
       screen.key(['up', 'down', 'left', 'right'], () => {
-        // Clear multi-selection state when navigating without shift
-        multiSelectStartIndex = -1;
-        highlightedIndices.clear();
+        // Only clear multi-selection when treeBox has focus
+        if (activeBox === 'treeBox') {
+          // Clear multi-selection state when navigating without shift
+          multiSelectStartIndex = -1;
+          highlightedIndices.clear();
+        }
       });
 
       // Add Tab key handler to toggle focus between treeBox and infoBox
