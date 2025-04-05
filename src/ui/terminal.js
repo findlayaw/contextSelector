@@ -247,9 +247,14 @@ async function start(options) {
         if (isSearchActive) {
           // In search mode, get the selected result
           const selectedResult = searchResults[treeBox.selected];
-          if (selectedResult && selectedResult.type === 'file') {
-            // Toggle selection for the file
-            toggleFileSelection(selectedResult);
+          if (selectedResult) {
+            if (selectedResult.type === 'file') {
+              // Toggle selection for the file
+              toggleFileSelection(selectedResult);
+            } else if (selectedResult.type === 'directory') {
+              // Select all files in the directory
+              selectAllFilesInDirectory(selectedResult);
+            }
             updateSelectedFiles(infoBox);
             updateTokenCount();
             updateStatus(statusBox, true);
@@ -265,12 +270,15 @@ async function start(options) {
 
           if (node.type === 'file') {
             toggleFileSelection(node);
-            updateSelectedFiles(infoBox);
-            updateTokenCount();
-            updateStatus(statusBox);
-            renderTree(treeBox, directoryTree);
-            screen.render();
+          } else if (node.type === 'directory') {
+            // Select all files in the directory
+            selectAllFilesInDirectory(node);
           }
+          updateSelectedFiles(infoBox);
+          updateTokenCount();
+          updateStatus(statusBox);
+          renderTree(treeBox, directoryTree);
+          screen.render();
         }
       });
 
@@ -527,6 +535,29 @@ function toggleFileSelection(node) {
 }
 
 /**
+ * Select all files in a directory and its subdirectories
+ * @param {Object} node - Directory node to select files from
+ */
+function selectAllFilesInDirectory(node) {
+  if (!node || node.type !== 'directory') return;
+
+  // Process all children
+  if (node.children && node.children.length > 0) {
+    for (const child of node.children) {
+      if (child.type === 'file') {
+        // Add the file if it's not already selected
+        if (!isFileSelected(child)) {
+          selectedFiles.push(child);
+        }
+      } else if (child.type === 'directory') {
+        // Recursively process subdirectories
+        selectAllFilesInDirectory(child);
+      }
+    }
+  }
+}
+
+/**
  * Check if a file is selected
  * @param {Object} node - Node to check
  * @returns {boolean} - True if the file is selected
@@ -577,7 +608,7 @@ function updateStatus(box, isSearchMode = false) {
     'Controls:',
     '  ↑/↓: Navigate',
     '  Enter: Expand/collapse directory',
-    '  Space: Select/deselect file',
+    '  Space: Select/deselect file or select all files in directory',
     '  /: Search',
     '  Escape: ' + (isSearchMode ? 'Exit search mode' : 'Quit'),
     '  t: Load template',
