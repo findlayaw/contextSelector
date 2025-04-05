@@ -24,7 +24,7 @@ async function run(options) {
 
     if (result.selectedFiles && result.selectedFiles.length > 0) {
       // Format the selected files
-      const formattedContent = formatter.formatForLLM(
+      const formattedContent = await formatter.formatForLLM(
         result.selectedFiles,
         result.directoryTree
       );
