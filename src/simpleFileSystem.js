@@ -1,5 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const ignore = require('ignore');
+
+// Store gitignore rules for each directory
+const gitignoreRules = new Map();
 
 let rootDir = '';
 
@@ -9,6 +13,12 @@ let rootDir = '';
  */
 function init(directory) {
   rootDir = directory;
+
+  // Clear any existing gitignore rules
+  gitignoreRules.clear();
+
+  // Load gitignore rules for the root directory
+  loadGitignoreRules(directory);
 }
 
 /**
@@ -51,11 +61,20 @@ function getDirectoryTree(startPath = rootDir) {
         items = [];
       }
 
+      // Load gitignore rules for this directory
+      loadGitignoreRules(startPath);
+
       // Process children
       const children = [];
       for (const item of items) {
         try {
           const itemPath = path.join(startPath, item);
+
+          // Check if this item should be ignored
+          if (shouldIgnore(itemPath, rootDir)) {
+            continue;
+          }
+
           const node = getDirectoryTree(itemPath);
           if (node) {
             children.push(node);
@@ -132,9 +151,77 @@ function formatDirectoryTree(tree, prefix = '') {
   return result;
 }
 
+/**
+ * Load gitignore rules for a directory
+ * @param {string} directory - Directory to load rules for
+ */
+function loadGitignoreRules(directory) {
+  try {
+    const gitignorePath = path.join(directory, '.gitignore');
+
+    // Check if .gitignore exists
+    if (fs.existsSync(gitignorePath)) {
+      const content = fs.readFileSync(gitignorePath, 'utf8');
+      const ig = ignore().add(content);
+
+      // Add default ignores
+      ig.add(['node_modules', '.git', 'dist', 'build']);
+
+      // Store the rules for this directory
+      gitignoreRules.set(directory, ig);
+    } else {
+      // Create a default ignore rule set
+      const ig = ignore().add(['node_modules', '.git', 'dist', 'build']);
+      gitignoreRules.set(directory, ig);
+    }
+  } catch (error) {
+    console.error(`Error loading gitignore for ${directory}:`, error.message);
+    // Create a default ignore rule set on error
+    const ig = ignore().add(['node_modules', '.git', 'dist', 'build']);
+    gitignoreRules.set(directory, ig);
+  }
+}
+
+/**
+ * Check if a path should be ignored based on gitignore rules
+ * @param {string} filePath - Path to check
+ * @param {string} baseDir - Base directory for relative path calculation
+ * @returns {boolean} - True if the path should be ignored
+ */
+function shouldIgnore(filePath, baseDir) {
+  // Get the closest parent directory with gitignore rules
+  let currentDir = path.dirname(filePath);
+  let relativePath = path.relative(baseDir, filePath);
+
+  // Replace backslashes with forward slashes for consistency
+  relativePath = relativePath.replace(/\\/g, '/');
+
+  // Check if we have rules for this directory or any parent
+  while (currentDir.startsWith(rootDir)) {
+    if (gitignoreRules.has(currentDir)) {
+      const ig = gitignoreRules.get(currentDir);
+      return ig.ignores(relativePath);
+    }
+
+    // Move up to parent directory
+    currentDir = path.dirname(currentDir);
+  }
+
+  // If we reach the root without finding rules, use root rules
+  if (gitignoreRules.has(rootDir)) {
+    const ig = gitignoreRules.get(rootDir);
+    return ig.ignores(relativePath);
+  }
+
+  // Default to not ignoring if no rules found
+  return false;
+}
+
 module.exports = {
   init,
   getDirectoryTree,
   readFileContent,
-  formatDirectoryTree
+  formatDirectoryTree,
+  loadGitignoreRules,
+  shouldIgnore
 };

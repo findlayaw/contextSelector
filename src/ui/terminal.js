@@ -56,6 +56,7 @@ async function start(options) {
         keys: true,
         vi: true,
         mouse: false,
+        tags: true,
         style: {
           selected: {
             bg: 'blue',
@@ -85,7 +86,8 @@ async function start(options) {
         },
         keys: true,
         vi: true,
-        mouse: false
+        mouse: false,
+        tags: true
       });
 
       // Create the status box
@@ -98,7 +100,8 @@ async function start(options) {
           type: 'line'
         },
         label: ' Status ',
-        content: 'Loading...'
+        content: 'Loading...',
+        tags: true
       });
 
       // Create the search box
@@ -113,7 +116,8 @@ async function start(options) {
         label: ' Search ',
         hidden: true,
         keys: true,
-        inputOnFocus: true
+        inputOnFocus: true,
+        tags: true
       });
 
       // Create the template name input box
@@ -128,7 +132,8 @@ async function start(options) {
         label: ' Save Template As ',
         hidden: true,
         keys: true,
-        inputOnFocus: true
+        inputOnFocus: true,
+        tags: true
       });
 
       // Create the template selection box
@@ -144,6 +149,7 @@ async function start(options) {
         hidden: true,
         keys: true,
         vi: true,
+        tags: true,
         items: [],
         style: {
           selected: {
@@ -417,10 +423,16 @@ function renderTree(box, tree) {
     const indent = '  '.repeat(level);
     const isExpanded = node === tree || isNodeExpanded(node);
     const prefix = node.type === 'directory' ? (isExpanded ? '▼ ' : '▶ ') : '  ';
-    const selected = isFileSelected(node) ? '{green-fg}✓{/green-fg} ' : '  ';
+    // Use a different approach for coloring
+    const selected = isFileSelected(node) ? '✓ ' : '  ';
     const name = node.name + (node.type === 'directory' ? '/' : '');
 
-    return `${indent}${prefix}${selected}${name}`;
+    // If the file is selected, wrap the checkmark with color tags
+    if (isFileSelected(node)) {
+      return `${indent}${prefix}{green-fg}${selected}{/green-fg}${name}`;
+    } else {
+      return `${indent}${prefix}${selected}${name}`;
+    }
   });
 
   // Set the items in the list
@@ -601,11 +613,16 @@ function displaySearchResults(box, results) {
   const items = results.map(node => {
     const level = 0; // All results at the same level for simplicity
     const prefix = node.type === 'directory' ? '▶ ' : '  ';
-    const selected = isFileSelected(node) ? '{green-fg}✓{/green-fg} ' : '  ';
+    const selected = isFileSelected(node) ? '✓ ' : '  ';
     const name = node.name + (node.type === 'directory' ? '/' : '');
     const path = node.relativePath;
 
-    return `${prefix}${selected}${name} {gray-fg}(${path}){/gray-fg}`;
+    // If the file is selected, wrap the checkmark with color tags
+    if (isFileSelected(node)) {
+      return `${prefix}{green-fg}${selected}{/green-fg}${name} {gray-fg}(${path}){/gray-fg}`;
+    } else {
+      return `${prefix}${selected}${name} {gray-fg}(${path}){/gray-fg}`;
+    }
   });
 
   // Set the items in the list
