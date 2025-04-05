@@ -568,6 +568,18 @@ async function start(options) {
         screen.render();
       });
 
+      // Add key handlers for up/down navigation to maintain padding
+      treeBox.key(['up', 'down'], () => {
+        // Calculate the scroll position to maintain padding at the top
+        const currentSelection = treeBox.selected;
+        const paddingLines = 3; // Number of lines to show above the selected item
+        const scrollPosition = Math.max(0, currentSelection - paddingLines);
+
+        // Scroll to the calculated position
+        treeBox.scrollTo(scrollPosition);
+        screen.render();
+      });
+
       // Set focus to the tree box
       treeBox.focus();
 
@@ -676,8 +688,13 @@ function renderTree(box, tree) {
       box.select(0);
     }
 
-    // Scroll to the top
-    box.scrollTo(0);
+    // Calculate the scroll position to maintain padding at the top
+    const currentSelection = box.selected;
+    const paddingLines = 3; // Number of lines to show above the selected item
+    const scrollPosition = Math.max(0, currentSelection - paddingLines);
+
+    // Scroll to the calculated position
+    box.scrollTo(scrollPosition);
   } catch (error) {
     console.error('Error in renderTree:', error);
     box.setItems(['Error rendering tree: ' + error.message]);
@@ -1106,6 +1123,14 @@ function displaySearchResults(box, results, preserveSelection = false) {
   } else {
     box.select(0);
   }
+
+  // Calculate the scroll position to maintain padding at the top
+  const selectedIndex = box.selected;
+  const paddingLines = 3; // Number of lines to show above the selected item
+  const scrollPosition = Math.max(0, selectedIndex - paddingLines);
+
+  // Scroll to the calculated position
+  box.scrollTo(scrollPosition);
 }
 
 /**
