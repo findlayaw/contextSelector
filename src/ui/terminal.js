@@ -314,8 +314,8 @@ async function start(options) {
         screen.render();
       });
 
-      screen.key('t', () => {
-        showTemplateSelection(templateSelectBox);
+      screen.key('t', async () => {
+        await showTemplateSelection(templateSelectBox);
         screen.render();
       });
 
