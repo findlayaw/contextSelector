@@ -74,7 +74,7 @@ aw --template "my-template"
 
 The tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension:
 
-```markdown
+````markdown
 # Project Directory Structure
 
 ```
@@ -109,7 +109,7 @@ console.log('Hello, world!');
 ```
 
 ---
-```
+````
 
 ## Templates
 
