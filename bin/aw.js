@@ -14,6 +14,7 @@ program
   .option('-g, --graph', 'Enable graph mode to analyze code relationships')
   .option('-c, --codemaps', 'Enable code maps mode to extract code structure')
   .option('--include-contents', 'Include file contents in code maps mode (less token efficient)')
+  .option('--xml', 'Use XML output format instead of Markdown')
   .action(async (options) => {
     try {
       await app.run(options);
