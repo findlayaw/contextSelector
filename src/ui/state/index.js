@@ -33,6 +33,7 @@ const state = {
   currentPrompt: '',
   promptTemplateToSave: null,
   templateLoaderFocus: 'files', // 'files' or 'prompts'
+  selectedPromptTemplates: [], // Track selected prompt templates
 
   // Multi-selection state
   multiSelectStartIndex: -1,
@@ -95,6 +96,7 @@ function resetState() {
   state.currentPrompt = '';
   state.promptTemplateToSave = null;
   state.templateLoaderFocus = 'files';
+  state.selectedPromptTemplates = [];
   state.multiSelectStartIndex = -1;
   state.highlightedIndices = new Set();
   state.flattenedTree = [];
@@ -122,6 +124,7 @@ function getResult() {
     templateFiles: state.templateFiles.length > 0 ? state.templateFiles : null,
     currentPrompt: state.currentPrompt,
     promptTemplateToSave: state.promptTemplateToSave,
+    selectedPromptTemplates: state.selectedPromptTemplates.length > 0 ? state.selectedPromptTemplates : null,
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat
@@ -142,6 +145,7 @@ function getEmptyResult() {
     templateFiles: null,
     currentPrompt: '',
     promptTemplateToSave: null,
+    selectedPromptTemplates: null,
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat

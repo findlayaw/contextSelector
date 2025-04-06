@@ -13,15 +13,15 @@ const statusView = require('../components/statusView');
  */
 function showPromptInput(promptBox, screen) {
   const state = stateManager.getState();
-  
+
   // Load current prompt into the box
   promptBox.setValue(state.currentPrompt);
-  
+
   // Show the prompt box
   promptBox.hidden = false;
   promptBox.show();
   promptBox.focus();
-  
+
   screen.render();
 }
 
@@ -33,7 +33,7 @@ function showPromptInput(promptBox, screen) {
  */
 function savePromptTemplateInfo(templateName, promptContent, statusBox) {
   const state = stateManager.getState();
-  
+
   if (templateName && promptContent) {
     // Save the template name and prompt content
     state.promptTemplateToSave = templateName;
@@ -53,19 +53,19 @@ function savePromptTemplateInfo(templateName, promptContent, statusBox) {
  */
 async function loadPromptTemplate(templateName, promptBox, statusBox) {
   const state = stateManager.getState();
-  
+
   try {
     const promptContent = await promptManager.loadPromptTemplate(templateName);
-    
+
     if (promptContent !== null) {
       // Update the state with the loaded prompt
       state.currentPrompt = promptContent;
-      
+
       // If the prompt box is visible, update its content
       if (!promptBox.hidden) {
         promptBox.setValue(promptContent);
       }
-      
+
       // Show success message
       statusBox.setContent(`Prompt template "${templateName}" loaded.`);
       return true;
@@ -90,26 +90,29 @@ async function loadPromptTemplate(templateName, promptBox, statusBox) {
  */
 async function showTemplateLoader(templateLoaderBox, fileTemplateList, promptTemplateList, screen) {
   const state = stateManager.getState();
-  
+
+  // Reset selected prompt templates
+  state.selectedPromptTemplates = [];
+
   // Load file templates
   const fileTemplateManager = require('../../templates/manager');
   const fileTemplates = await fileTemplateManager.listTemplates();
   fileTemplateList.setItems(fileTemplates.length > 0 ? fileTemplates : ['No file templates']);
-  
+
   // Load prompt templates
   const promptTemplates = await promptManager.listPromptTemplates();
   promptTemplateList.setItems(promptTemplates.length > 0 ? promptTemplates : ['No prompt templates']);
-  
+
   // Set initial focus
   state.templateLoaderFocus = 'files';
   fileTemplateList.focus();
   fileTemplateList.style.border = { fg: 'green' }; // Focused style
   promptTemplateList.style.border = { fg: 'white' }; // Unfocused style
-  
+
   // Show the template loader
   templateLoaderBox.hidden = false;
   templateLoaderBox.show();
-  
+
   screen.render();
 }
 

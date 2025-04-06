@@ -96,6 +96,9 @@ function setupKeyHandlers(screen, components, resolvePromise) {
     // Skip if infoBox has focus - let the infoBox space handler handle it
     if (state.activeBox === 'infoBox') return;
 
+    // Skip if template loader is visible
+    if (!templateLoaderBox.hidden) return;
+
     // Check if we have highlighted items for multi-selection
     if (state.highlightedIndices.size > 0) {
       if (state.isSearchActive) {
@@ -1027,7 +1030,15 @@ function setupInfoBoxHandlers(infoBox, treeBox, screen) {
       // Update UI with preserved selection position
       selectionView.updateSelectedFilesWithSelection(infoBox, newSelectionIndex);
       selectionView.updateTokenCount();
-      statusView.updateStatus(statusBox, state.isSearchActive, false, templateSelectBox);
+
+      // Get the status box component
+      const components = screen.children;
+      const statusBoxComponent = components.find(c => c.options && c.options.label === ' Status ');
+      const templateLoaderBoxComponent = components.find(c => c.options && c.options.label && c.options.label.includes('Template Loader'));
+
+      if (statusBoxComponent) {
+        statusView.updateStatus(statusBoxComponent, state.isSearchActive, false, templateLoaderBoxComponent);
+      }
 
       if (state.isSearchActive) {
         searchHandler.displaySearchResults(treeBox, state.searchResults, true);
@@ -1284,6 +1295,66 @@ function setupTemplateLoaderHandlers(templateLoaderBox, fileTemplateList, prompt
     return true;
   });
 
+  // Add enter key handler to file template list
+  fileTemplateList.key('enter', async () => {
+    if (templateLoaderBox.hidden) return;
+
+    const selectedItem = fileTemplateList.getItem(fileTemplateList.selected);
+    if (!selectedItem || selectedItem.content === 'No file templates') return;
+
+    const templateName = selectedItem.content;
+    const success = await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
+
+    templateLoaderBox.hide();
+    templateLoaderBox.hidden = true;
+    treeBox.focus();
+
+    if (success) {
+      statusBox.setContent(`File template "${templateName}" loaded.`);
+    } else {
+      statusBox.setContent(`{red-fg}Failed to load file template "${templateName}".{/red-fg}`);
+    }
+
+    screen.render();
+
+    setTimeout(() => {
+      statusView.updateStatus(statusBox, state.isSearchActive, false);
+      screen.render();
+    }, 2000);
+
+    return true;
+  });
+
+  // Add space key handler to file template list (same as enter)
+  fileTemplateList.key('space', async () => {
+    if (templateLoaderBox.hidden) return;
+
+    const selectedItem = fileTemplateList.getItem(fileTemplateList.selected);
+    if (!selectedItem || selectedItem.content === 'No file templates') return;
+
+    const templateName = selectedItem.content;
+    const success = await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
+
+    templateLoaderBox.hide();
+    templateLoaderBox.hidden = true;
+    treeBox.focus();
+
+    if (success) {
+      statusBox.setContent(`File template "${templateName}" loaded.`);
+    } else {
+      statusBox.setContent(`{red-fg}Failed to load file template "${templateName}".{/red-fg}`);
+    }
+
+    screen.render();
+
+    setTimeout(() => {
+      statusView.updateStatus(statusBox, state.isSearchActive, false);
+      screen.render();
+    }, 2000);
+
+    return true;
+  });
+
   promptTemplateList.key('tab', () => {
     if (templateLoaderBox.hidden) return;
 
@@ -1297,47 +1368,145 @@ function setupTemplateLoaderHandlers(templateLoaderBox, fileTemplateList, prompt
     return true;
   });
 
-  // Handle Enter to load selected template
-  templateLoaderBox.key('enter', async () => {
+  // Add enter key handler to prompt template list to load all selected templates
+  promptTemplateList.key('enter', async () => {
     if (templateLoaderBox.hidden) return;
 
-    let selectedItem;
-    let templateName;
-    let success = false;
-    let itemType = '';
+    // Get the promptBox and statusBox from screen's children
+    const components = screen.children;
+    const promptBoxComponent = components.find(c => c.options && c.options.label && c.options.label.includes('Prompt (Shift+Enter'));
+    const statusBoxComponent = components.find(c => c.options && c.options.label === ' Status ');
 
-    if (state.templateLoaderFocus === 'files') {
-      selectedItem = fileTemplateList.getItem(fileTemplateList.selected);
-      if (!selectedItem || selectedItem.content === 'No file templates') return;
+    if (!promptBoxComponent || !statusBoxComponent) return;
 
-      templateName = selectedItem.content;
-      itemType = 'File';
-      success = await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
-    } else {
-      selectedItem = promptTemplateList.getItem(promptTemplateList.selected);
+    // If no templates are selected, select the currently highlighted one
+    if (state.selectedPromptTemplates.length === 0) {
+      const selectedItem = promptTemplateList.getItem(promptTemplateList.selected);
       if (!selectedItem || selectedItem.content === 'No prompt templates') return;
 
-      templateName = selectedItem.content;
-      itemType = 'Prompt';
-      success = await promptHandler.loadPromptTemplate(templateName, promptBox, statusBox);
+      // Check if the item is already marked as selected (has a checkmark)
+      let templateName = selectedItem.content;
+      if (templateName.startsWith('✓ ')) {
+        templateName = templateName.substring(2);
+      }
+
+      state.selectedPromptTemplates.push(templateName);
     }
 
+    // Load all selected templates
+    let loadedTemplates = [];
+
+    for (const templateName of state.selectedPromptTemplates) {
+      const success = await promptHandler.loadPromptTemplate(templateName, promptBoxComponent, statusBoxComponent);
+      if (success) {
+        loadedTemplates.push(templateName);
+      }
+    }
+
+    // Close the template loader
     templateLoaderBox.hide();
     templateLoaderBox.hidden = true;
     treeBox.focus();
 
-    if (success) {
-      statusBox.setContent(`${itemType} template "${templateName}" loaded.`);
+    // Show status message
+    if (loadedTemplates.length > 0) {
+      if (loadedTemplates.length === 1) {
+        statusBoxComponent.setContent(`Prompt template "${loadedTemplates[0]}" loaded.`);
+      } else {
+        statusBoxComponent.setContent(`Loaded ${loadedTemplates.length} prompt templates: "${loadedTemplates.join('", "')}".`);
+      }
     } else {
-      statusBox.setContent(`{red-fg}Failed to load ${itemType} template "${templateName}".{/red-fg}`);
+      statusBoxComponent.setContent(`{red-fg}Failed to load any prompt templates.{/red-fg}`);
     }
+
+    // Clear the selected templates array
+    state.selectedPromptTemplates = [];
 
     screen.render();
 
     setTimeout(() => {
-      statusView.updateStatus(statusBox, state.isSearchActive, false);
+      statusView.updateStatus(statusBoxComponent, state.isSearchActive, false);
       screen.render();
     }, 2000);
+
+    return true;
+  });
+
+  // Add space key handler to prompt template list for multi-selection
+  promptTemplateList.key('space', () => {
+    if (templateLoaderBox.hidden) return;
+
+    const selectedItem = promptTemplateList.getItem(promptTemplateList.selected);
+    if (!selectedItem || selectedItem.content === 'No prompt templates') return;
+
+    const templateName = selectedItem.content;
+    const statusBoxComponent = screen.children.find(c => c.options && c.options.label === ' Status ');
+
+    // Toggle selection of this template
+    const index = state.selectedPromptTemplates.indexOf(templateName);
+    if (index === -1) {
+      // Add to selected templates
+      state.selectedPromptTemplates.push(templateName);
+      // Update the display to show it's selected
+      selectedItem.content = `✓ ${templateName}`;
+
+      if (statusBoxComponent) {
+        statusBoxComponent.setContent(`Selected prompt template: "${templateName}". Press Enter to load selected templates.`);
+      }
+    } else {
+      // Remove from selected templates
+      state.selectedPromptTemplates.splice(index, 1);
+      // Update the display to show it's not selected
+      selectedItem.content = templateName.replace(/^✓\s*/, '');
+
+      if (statusBoxComponent) {
+        statusBoxComponent.setContent(`Unselected prompt template: "${templateName}".`);
+      }
+    }
+
+    // Move to the next item in the list
+    if (promptTemplateList.selected < promptTemplateList.items.length - 1) {
+      promptTemplateList.down(1);
+    }
+
+    screen.render();
+    return true;
+  });
+
+  // Handle Enter to load selected template
+  templateLoaderBox.key('enter', async () => {
+    if (templateLoaderBox.hidden) return;
+
+    // This handler is now only used for file templates
+    // Prompt templates have their own enter handler that handles multi-selection
+    if (state.templateLoaderFocus === 'files') {
+      const selectedItem = fileTemplateList.getItem(fileTemplateList.selected);
+      if (!selectedItem || selectedItem.content === 'No file templates') return;
+
+      const templateName = selectedItem.content;
+      const success = await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
+
+      templateLoaderBox.hide();
+      templateLoaderBox.hidden = true;
+      treeBox.focus();
+
+      if (success) {
+        statusBox.setContent(`File template "${templateName}" loaded.`);
+      } else {
+        statusBox.setContent(`{red-fg}Failed to load file template "${templateName}".{/red-fg}`);
+      }
+
+      screen.render();
+
+      setTimeout(() => {
+        statusView.updateStatus(statusBox, state.isSearchActive, false);
+        screen.render();
+      }, 2000);
+    } else {
+      // For prompt templates, trigger the enter key on the promptTemplateList
+      // This will use the multi-selection handler we defined earlier
+      promptTemplateList.emit('keypress', null, { name: 'enter' });
+    }
   });
 
   // Handle 'd' to delete selected template
