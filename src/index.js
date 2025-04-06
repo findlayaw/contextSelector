@@ -7,6 +7,7 @@ const copy = require('./clipboard/copy');
 const templateManager = require('./templates/manager');
 const graphAnalyzer = require('./graph/analyzer');
 const graphFormatter = require('./graph/formatter');
+const tokenCounter = require('./utils/tokenCounter');
 
 /**
  * Main application entry point
@@ -50,10 +51,13 @@ async function run(options) {
         );
       }
 
+      // Calculate the actual token count of the formatted content
+      const actualTokenCount = tokenCounter.countFormattedTokens(formattedContent);
+
       // Copy to clipboard
       await copy.toClipboard(formattedContent);
 
-      console.log(`Copied ${result.selectedFiles.length} files to clipboard (${result.tokenCount} tokens)`);
+      console.log(`Copied ${result.selectedFiles.length} files to clipboard (${actualTokenCount} tokens)`);
 
       // Save template if requested
       if (result.saveTemplate) {

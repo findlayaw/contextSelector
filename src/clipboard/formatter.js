@@ -1,5 +1,6 @@
 const path = require('path');
 const fileSystem = require('../simpleFileSystem');
+const tokenCounter = require('../utils/tokenCounter');
 
 /**
  * Format selected files for LLM consumption

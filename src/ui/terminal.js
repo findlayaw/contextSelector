@@ -1499,13 +1499,33 @@ function updateSelectedFilesWithSelection(box, selectionIndex) {
 
 /**
  * Update the token count
+ * This is an estimate based on individual files, not the final formatted output
  */
 function updateTokenCount() {
   tokenCount = 0;
 
+  // First, count the tokens in the directory tree structure
+  if (directoryTree) {
+    const treeStructure = fileSystem.formatDirectoryTree(directoryTree);
+    tokenCount += tokenCounter.countTokens(treeStructure);
+  }
+
+  // Add some tokens for the Markdown formatting and headers
+  tokenCount += 100; // Rough estimate for formatting overhead
+
+  // Count tokens in each selected file
   for (const file of selectedFiles) {
     const content = fileSystem.readFileContent(file.path);
     tokenCount += tokenCounter.countTokens(content);
+
+    // Add some tokens for the file path and code block formatting
+    tokenCount += 20; // Rough estimate for file header and formatting
+  }
+
+  // If in graph mode, add an estimate for the graph information
+  if (isGraphModeEnabled && selectedFiles.length > 0) {
+    // Rough estimate for graph information based on number of files
+    tokenCount += selectedFiles.length * 50;
   }
 }
 

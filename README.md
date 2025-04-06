@@ -8,7 +8,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 - Respect `.gitignore` files to exclude irrelevant files
 - Select multiple files from different directories
 - Copy selected files to clipboard in LLM-friendly format
-- Real-time token counting
+- Real-time token counting of the entire formatted output
 - Search for files and folders
 - Save and load selection templates
 - Graph mode for analyzing code relationships

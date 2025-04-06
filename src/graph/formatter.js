@@ -4,6 +4,7 @@
 const path = require('path');
 const fs = require('fs');
 const fileSystem = require('../simpleFileSystem');
+const tokenCounter = require('../utils/tokenCounter');
 
 /**
  * Format code graph for LLM consumption
@@ -59,20 +60,20 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Add file dependencies section
   result += '# File Dependencies\n\n';
-  
+
   // Group files by their dependencies
   const fileDependencies = new Map();
-  
+
   for (const edge of codeGraph.edges) {
     if (edge.type === 'imports') {
       const sourceNode = codeGraph.nodes.find(node => node.id === edge.source);
       const targetNode = codeGraph.nodes.find(node => node.id === edge.target);
-      
+
       if (sourceNode && targetNode) {
         if (!fileDependencies.has(sourceNode.id)) {
           fileDependencies.set(sourceNode.id, []);
         }
-        
+
         fileDependencies.get(sourceNode.id).push({
           id: targetNode.id,
           name: path.basename(targetNode.path)
@@ -80,14 +81,14 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       }
     }
   }
-  
+
   // Format file dependencies
   for (const [fileId, dependencies] of fileDependencies.entries()) {
     const fileNode = codeGraph.nodes.find(node => node.id === fileId);
     if (fileNode) {
       result += `## ${fileNode.path}\n\n`;
       result += 'Dependencies:\n';
-      
+
       if (dependencies.length === 0) {
         result += '- None\n';
       } else {
@@ -95,7 +96,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
           result += `- ${dep.name} (${dep.id})\n`;
         }
       }
-      
+
       result += '\n';
     }
   }
@@ -105,20 +106,20 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Add function calls section
   result += '# Function Calls\n\n';
-  
+
   // Group functions by their calls
   const functionCalls = new Map();
-  
+
   for (const edge of codeGraph.edges) {
     if (edge.type === 'calls') {
       const sourceNode = codeGraph.nodes.find(node => node.id === edge.source);
       const targetNode = codeGraph.nodes.find(node => node.id === edge.target);
-      
+
       if (sourceNode && targetNode) {
         if (!functionCalls.has(sourceNode.id)) {
           functionCalls.set(sourceNode.id, []);
         }
-        
+
         functionCalls.get(sourceNode.id).push({
           id: targetNode.id,
           name: targetNode.label,
@@ -127,14 +128,14 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       }
     }
   }
-  
+
   // Format function calls
   for (const [funcId, calls] of functionCalls.entries()) {
     const funcNode = codeGraph.nodes.find(node => node.id === funcId);
     if (funcNode) {
       result += `## ${funcNode.label} (${funcNode.path})\n\n`;
       result += 'Calls:\n';
-      
+
       if (calls.length === 0) {
         result += '- None\n';
       } else {
@@ -142,7 +143,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
           result += `- ${call.name} (${call.path})\n`;
         }
       }
-      
+
       result += '\n';
     }
   }
@@ -185,7 +186,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
  */
 function formatCypherQuery(codeGraph) {
   let query = '// Cypher query for importing the code graph into Neo4j\n\n';
-  
+
   // Create nodes
   for (const node of codeGraph.nodes) {
     let properties = '';
@@ -200,23 +201,23 @@ function formatCypherQuery(codeGraph) {
         }
       }
     }
-    
+
     // Remove trailing comma and space
     if (properties.endsWith(', ')) {
       properties = properties.slice(0, -2);
     }
-    
+
     query += `CREATE (n:${node.type.charAt(0).toUpperCase() + node.type.slice(1)} {id: "${node.id}", ${properties}})\n`;
   }
-  
+
   query += '\n';
-  
+
   // Create relationships
   for (const edge of codeGraph.edges) {
     query += `MATCH (a), (b) WHERE a.id = "${edge.source}" AND b.id = "${edge.target}"\n`;
     query += `CREATE (a)-[:${edge.type.toUpperCase()}]->(b)\n`;
   }
-  
+
   return query;
 }
 
@@ -227,12 +228,12 @@ function formatCypherQuery(codeGraph) {
  */
 function formatSExpression(codeGraph) {
   let result = '(graph\n';
-  
+
   // Add nodes
   result += '  (nodes\n';
   for (const node of codeGraph.nodes) {
     result += `    (node :id "${node.id}" :type "${node.type}" :label "${node.label || ''}"`;
-    
+
     // Add other properties
     for (const [key, value] of Object.entries(node)) {
       if (key !== 'id' && key !== 'type' && key !== 'label' && value !== undefined) {
@@ -247,16 +248,16 @@ function formatSExpression(codeGraph) {
         }
       }
     }
-    
+
     result += ')\n';
   }
   result += '  )\n';
-  
+
   // Add edges
   result += '  (edges\n';
   for (const edge of codeGraph.edges) {
     result += `    (edge :source "${edge.source}" :target "${edge.target}" :type "${edge.type}"`;
-    
+
     // Add other properties
     for (const [key, value] of Object.entries(edge)) {
       if (key !== 'source' && key !== 'target' && key !== 'type' && key !== 'id' && value !== undefined) {
@@ -269,13 +270,13 @@ function formatSExpression(codeGraph) {
         }
       }
     }
-    
+
     result += ')\n';
   }
   result += '  )\n';
-  
+
   result += ')\n';
-  
+
   return result;
 }
 
