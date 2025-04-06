@@ -7,7 +7,10 @@ const copy = require('./clipboard/copy');
 const templateManager = require('./templates/manager');
 const graphAnalyzer = require('./graph/analyzer');
 const graphFormatter = require('./graph/formatter');
+const codeMapsParser = require('./codemaps/parser');
+const codeMapsFormatter = require('./codemaps/formatter');
 const tokenCounter = require('./utils/tokenCounter');
+const modeHandler = require('./ui/modeHandler');
 
 /**
  * Main application entry point
@@ -23,14 +26,16 @@ async function run(options) {
       startDir: options.directory,
       searchQuery: options.search,
       template: options.template,
-      graphMode: options.graph // Pass graph mode option to terminal
+      graphMode: options.graph, // Pass graph mode option to terminal
+      codeMapsMode: options.codemaps, // Pass codemaps mode option to terminal
+      includeContents: options.includeContents // Pass include contents option to terminal
     });
 
     if (result.selectedFiles && result.selectedFiles.length > 0) {
       let formattedContent;
 
-      // Check if graph mode is enabled (either from command line or from terminal UI)
-      if (result.mode === 'graph') {
+      // Check which mode is enabled (either from command line or from terminal UI)
+      if (result.mode === modeHandler.MODES.GRAPH) {
         console.log('Building code graph...');
         // Build code graph
         const codeGraph = graphAnalyzer.buildCodeGraph(result.selectedFiles);
@@ -43,8 +48,25 @@ async function run(options) {
         );
 
         console.log(`Built code graph with ${codeGraph.nodes.length} nodes and ${codeGraph.edges.length} relationships`);
+      } else if (result.mode === modeHandler.MODES.CODEMAPS) {
+        console.log('Building code maps...');
+        // Build code maps
+        const codeMaps = codeMapsParser.buildCodeMaps(result.selectedFiles);
+
+        // Format the code maps for LLM
+        formattedContent = await codeMapsFormatter.formatCodeMapsForLLM(
+          result.selectedFiles,
+          result.directoryTree,
+          codeMaps,
+          {
+            // Include file contents if specified in options
+            includeFileContents: options.includeContents || false
+          }
+        );
+
+        console.log(`Built code maps with ${codeMaps.files.length} files and ${codeMaps.relationships.length} relationships`);
       } else {
-        // Format the selected files normally
+        // Format the selected files normally (standard mode)
         formattedContent = await formatter.formatForLLM(
           result.selectedFiles,
           result.directoryTree

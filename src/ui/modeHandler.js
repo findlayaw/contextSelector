@@ -5,7 +5,8 @@
 // Define available modes
 const MODES = {
   STANDARD: 'standard',
-  GRAPH: 'graph'
+  GRAPH: 'graph',
+  CODEMAPS: 'codemaps'
   // Add more modes here in the future
 };
 
@@ -17,13 +18,13 @@ const MODES = {
 function getNextMode(currentMode) {
   // Get all mode values as an array
   const modeValues = Object.values(MODES);
-  
+
   // Find the index of the current mode
   const currentIndex = modeValues.indexOf(currentMode);
-  
+
   // Get the next mode in the cycle (or the first if we're at the end)
   const nextIndex = (currentIndex + 1) % modeValues.length;
-  
+
   return modeValues[nextIndex];
 }
 
@@ -38,6 +39,8 @@ function getModeName(mode) {
       return 'Standard';
     case MODES.GRAPH:
       return 'Graph Analysis';
+    case MODES.CODEMAPS:
+      return 'Code Maps';
     default:
       return 'Unknown';
   }

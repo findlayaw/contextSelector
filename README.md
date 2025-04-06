@@ -12,6 +12,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 - Search for files and folders
 - Save and load selection templates
 - Graph mode for analyzing code relationships
+- Code Maps mode for extracting code structure
 
 ## Installation
 
@@ -32,10 +33,10 @@ npm link
 Run the `aw` command in your terminal:
 
 ```bash
-# Run in the current directory
+# Basic usage - starts in Standard mode
 aw
 
-# Run in a specific directory
+# Specify a starting directory
 aw --directory /path/to/project
 
 # Start with a search query
@@ -43,12 +44,27 @@ aw --search "filename"
 
 # Load a saved template
 aw --template "my-template"
+```
 
-# Start with graph mode enabled for code relationship analysis
+### Mode Selection
+
+You can start the application in different modes:
+
+```bash
+# Standard mode (default) - full file contents
+aw
+
+# Graph Analysis mode - code relationships with full file contents
 aw --graph
 
-# You can also toggle between modes while the application is running by pressing 'm'
+# Code Maps mode - API-level structure without implementation details (token efficient)
+aw --codemaps
+
+# Code Maps mode with full file contents (less token efficient)
+aw --codemaps --include-contents
 ```
+
+You can toggle between modes while the application is running by pressing `m`.
 
 ## Keyboard Controls
 
@@ -72,7 +88,7 @@ aw --graph
 - **t**: Load a saved template
 - **s**: Save current selection as a template
 - **d**: Delete a template (when in template selection view)
-- **m**: Toggle between different modes (Standard, Graph Analysis)
+- **m**: Toggle between different modes (Standard, Graph Analysis, Code Maps)
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
 - **Escape**: Exit search mode, close template selection, or quit
@@ -81,9 +97,74 @@ aw --graph
 
 The tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension.
 
+## Application Modes
+
+The Context Selector tool offers three different modes, each designed for specific use cases:
+
+| Mode | Description | Best For | Token Usage |
+|------|-------------|----------|-------------|
+| Standard | Full file contents with directory structure | Detailed code analysis | Baseline |
+| Graph Analysis | Code relationships with full file contents | Understanding code interactions | Higher |
+| Code Maps | API-level structure without implementation details | Architecture overview | Lower |
+
+### When to Use Each Mode
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Mode Selection Guide                        │
+├───────────────────┬───────────────────────┬─────────────────────┤
+│   Standard Mode   │   Graph Analysis Mode │    Code Maps Mode   │
+├───────────────────┼───────────────────────┼─────────────────────┤
+│ • Implementation  │ • Code relationships  │ • API structure     │
+│   details         │ • Function calls      │ • Type definitions  │
+│ • Debugging       │ • Dependencies        │ • Token efficiency  │
+│ • Small codebases │ • Class hierarchies   │ • Large codebases   │
+│ • Algorithms      │ • Data flow           │ • Architecture      │
+└───────────────────┴───────────────────────┴─────────────────────┘
+                             ▲
+                             │
+┌─────────────────────────────────────────────────────────────────┐
+│                       Selection Factors                          │
+├───────────────────────────┬───────────────────────────────────┬─┤
+│ Need implementation       │ Need to understand                │ │
+│ details?           Yes ───┼──► Standard Mode                  │ │
+│                           │                                   │ │
+│ Need to understand        │ Need to understand                │ │
+│ code relationships? Yes ──┼──► Graph Analysis Mode            │ │
+│                           │                                   │ │
+│ Working with large        │ Need to optimize                  │ │
+│ codebase?         Yes ───┼──► Code Maps Mode                  │ │
+│                           │                                   │ │
+│ Need architecture         │ Need high-level                   │ │
+│ overview?         Yes ───┼──► Code Maps Mode                  │ │
+└───────────────────────────┴───────────────────────────────────┴─┘
+```
+
+#### Standard Mode
+- When you need to see the complete implementation details
+- For debugging specific code issues
+- When working with a small number of files
+- For understanding algorithms and logic flow within functions
+- When comments in the code contain important context
+
+#### Graph Analysis Mode
+- When you need to understand relationships between components
+- For analyzing function calls and dependencies
+- When refactoring code that has many interconnections
+- For visualizing class hierarchies and inheritance
+- When tracking how data flows through your application
+
+#### Code Maps Mode
+- When working with large codebases (can include more files within token limits)
+- For architecture and API design questions
+- When onboarding to a new codebase to understand structure
+- For planning refactoring work at a high level
+- When you need to optimize token usage
+- For understanding the public interfaces without implementation details
+
 ### Standard Mode
 
-In standard mode, the output includes the directory structure and file contents:
+Standard mode is the default mode. It provides a straightforward representation of your code, including the directory structure and complete file contents:
 
 ````markdown
 # Project Directory Structure
@@ -124,7 +205,7 @@ console.log('Hello, world!');
 
 ### Graph Mode
 
-In graph mode (enabled with `--graph`), the output includes code relationship information in addition to file contents:
+Graph Analysis mode (enabled with `--graph`) enhances your code context with relationship information. It analyzes imports, function calls, class hierarchies, and other code relationships while still including full file contents:
 
 ````markdown
 # Project Directory Structure
@@ -181,6 +262,86 @@ Calls:
 
 ---
 ````
+
+### Code Maps Mode
+
+Code Maps mode (enabled with `--codemaps`) provides a token-efficient structural view of your code. It focuses on API-level details like function signatures, class definitions, and import/export relationships. By default, it excludes full file contents to optimize token usage:
+
+````markdown
+# Project Directory Structure
+
+```
+project/
+  src/
+    index.js
+    utils/
+      helper.js
+  package.json
+```
+
+---
+
+# Code Maps
+
+This section provides a structural overview of the codebase, focusing on API-level information.
+
+## File Definitions
+
+### src/index.js
+
+**Language:** javascript
+
+**Imports:**
+- CommonJS require `helper` from `./utils/helper`
+
+**Definitions:**
+
+**Functions:**
+- `main()`
+
+### src/utils/helper.js
+
+**Language:** javascript
+
+**Definitions:**
+
+**Functions:**
+- `formatOutput(text)`
+
+**Exports:**
+- CommonJS export: `formatOutput`
+
+## File Relationships
+
+### src/index.js
+
+**Dependencies:**
+- Imports from `./utils/helper`: formatOutput
+
+---
+
+# Note on Selected Files
+
+Full file contents have been excluded to optimize token usage. This Code Maps view focuses on structural information and API definitions only.
+
+## Selected Files (Structure Only)
+- src/index.js
+- src/utils/helper.js
+
+---
+
+If you use the `--include-contents` option, the full file contents will be included at the end, similar to standard mode.
+````
+
+### Token Efficiency Comparison
+
+The different modes have varying levels of token efficiency, which can be important when working with LLMs that have token limits:
+
+- **Standard Mode**: Baseline token usage (100%)
+- **Graph Analysis Mode**: Typically 5-10% more tokens than Standard Mode due to added relationship information
+- **Code Maps Mode**: Typically 50-80% fewer tokens than Standard Mode when excluding file contents
+
+For large codebases, Code Maps mode can allow you to include significantly more files within your token budget, giving the LLM a broader view of your project structure.
 
 ## Templates
 

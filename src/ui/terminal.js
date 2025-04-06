@@ -38,6 +38,9 @@ let activeBox = 'treeBox';
 // Current application mode
 let currentMode = modeHandler.MODES.STANDARD;
 
+// CodeMaps options
+let includeContents = false;
+
 /**
  * Start the terminal UI
  * @param {Object} options - UI options
@@ -45,7 +48,15 @@ let currentMode = modeHandler.MODES.STANDARD;
  */
 async function start(options) {
   // Set initial mode based on options
-  currentMode = options.graphMode ? modeHandler.MODES.GRAPH : modeHandler.MODES.STANDARD;
+  if (options.graphMode) {
+    currentMode = modeHandler.MODES.GRAPH;
+  } else if (options.codeMapsMode) {
+    currentMode = modeHandler.MODES.CODEMAPS;
+    // Store the includeContents option
+    includeContents = options.includeContents || false;
+  } else {
+    currentMode = modeHandler.MODES.STANDARD;
+  }
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -281,7 +292,7 @@ async function start(options) {
       // Handle key events
       screen.key(['q', 'C-c'], () => {
         screen.destroy();
-        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
+        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode, includeContents: includeContents });
       });
 
       screen.key('enter', () => {
@@ -574,7 +585,8 @@ async function start(options) {
             tokenCount,
             saveTemplate: templateToSave,
             templateFiles: templateFiles.length > 0 ? templateFiles : null,
-            mode: currentMode
+            mode: currentMode,
+            includeContents: includeContents
           });
         }
       });
@@ -630,7 +642,7 @@ async function start(options) {
         } else {
           // Regular escape behavior (quit) - only when not in search mode or template selection
           screen.destroy();
-          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
+          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode, includeContents: includeContents });
         }
       });
 
@@ -1548,10 +1560,31 @@ function updateTokenCount() {
     tokenCount += 20; // Rough estimate for file header and formatting
   }
 
-  // If in graph mode, add an estimate for the graph information
-  if (currentMode === modeHandler.MODES.GRAPH && selectedFiles.length > 0) {
-    // Rough estimate for graph information based on number of files
-    tokenCount += selectedFiles.length * 50;
+  // Add mode-specific token estimates
+  if (selectedFiles.length > 0) {
+    if (currentMode === modeHandler.MODES.GRAPH) {
+      // Rough estimate for graph information based on number of files
+      tokenCount += selectedFiles.length * 50;
+    } else if (currentMode === modeHandler.MODES.CODEMAPS) {
+      if (!includeContents) {
+        // In CodeMaps mode without file contents, we only include structure
+        // So we subtract the tokens from the file contents and add a smaller amount for structure
+        for (const file of selectedFiles) {
+          const content = fileSystem.readFileContent(file.path);
+          // Subtract the tokens we already counted for this file's content
+          tokenCount -= tokenCounter.countTokens(content);
+        }
+
+        // Add tokens for the code structure information (much smaller than full content)
+        tokenCount += selectedFiles.length * 25;
+
+        // Add a small fixed amount for the file list
+        tokenCount += 50;
+      } else {
+        // If including file contents, add tokens for the structure on top of file contents
+        tokenCount += selectedFiles.length * 25;
+      }
+    }
   }
 }
 
