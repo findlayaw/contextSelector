@@ -44,8 +44,10 @@ aw --search "filename"
 # Load a saved template
 aw --template "my-template"
 
-# Enable graph mode for code relationship analysis
+# Start with graph mode enabled for code relationship analysis
 aw --graph
+
+# You can also toggle between modes while the application is running by pressing 'm'
 ```
 
 ## Keyboard Controls
@@ -70,6 +72,7 @@ aw --graph
 - **t**: Load a saved template
 - **s**: Save current selection as a template
 - **d**: Delete a template (when in template selection view)
+- **m**: Toggle between different modes (Standard, Graph Analysis)
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
 - **Escape**: Exit search mode, close template selection, or quit

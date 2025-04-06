@@ -29,8 +29,8 @@ async function run(options) {
     if (result.selectedFiles && result.selectedFiles.length > 0) {
       let formattedContent;
 
-      // Check if graph mode is enabled
-      if (options.graph) {
+      // Check if graph mode is enabled (either from command line or from terminal UI)
+      if (result.mode === 'graph') {
         console.log('Building code graph...');
         // Build code graph
         const codeGraph = graphAnalyzer.buildCodeGraph(result.selectedFiles);

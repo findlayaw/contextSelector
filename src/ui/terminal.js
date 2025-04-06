@@ -6,6 +6,7 @@ const search = require('../utils/search');
 const tokenCounter = require('../utils/tokenCounter');
 const templateManager = require('../templates/manager');
 const graphAnalyzer = require('../graph/analyzer');
+const modeHandler = require('./modeHandler');
 
 // Store the currently selected files
 let selectedFiles = [];
@@ -34,8 +35,8 @@ let highlightedIndices = new Set();
 // Track which box has focus (treeBox or infoBox)
 let activeBox = 'treeBox';
 
-// Graph mode state
-let isGraphModeEnabled = false;
+// Current application mode
+let currentMode = modeHandler.MODES.STANDARD;
 
 /**
  * Start the terminal UI
@@ -43,8 +44,8 @@ let isGraphModeEnabled = false;
  * @returns {Promise<Object>} - Result with selected files and other data
  */
 async function start(options) {
-  // Set graph mode state
-  isGraphModeEnabled = options.graphMode || false;
+  // Set initial mode based on options
+  currentMode = options.graphMode ? modeHandler.MODES.GRAPH : modeHandler.MODES.STANDARD;
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -280,7 +281,7 @@ async function start(options) {
       // Handle key events
       screen.key(['q', 'C-c'], () => {
         screen.destroy();
-        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null });
+        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
       });
 
       screen.key('enter', () => {
@@ -572,7 +573,8 @@ async function start(options) {
             directoryTree,
             tokenCount,
             saveTemplate: templateToSave,
-            templateFiles: templateFiles.length > 0 ? templateFiles : null
+            templateFiles: templateFiles.length > 0 ? templateFiles : null,
+            mode: currentMode
           });
         }
       });
@@ -628,7 +630,7 @@ async function start(options) {
         } else {
           // Regular escape behavior (quit) - only when not in search mode or template selection
           screen.destroy();
-          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null });
+          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
         }
       });
 
@@ -1068,6 +1070,30 @@ async function start(options) {
           activeBox = 'treeBox';
           treeBox.focus();
         }
+        screen.render();
+      });
+
+      // Add 'm' key handler to switch between modes
+      screen.key('m', () => {
+        // Switch to the next mode in the cycle
+        currentMode = modeHandler.getNextMode(currentMode);
+
+        // Update the status display to show the new mode
+        updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+
+        // Update token count as it may change based on mode
+        updateTokenCount();
+
+        // Show a notification about the mode change
+        const modeName = modeHandler.getModeName(currentMode);
+        statusBox.setContent(`{bold}Mode changed to:{/bold} ${modeName}\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox));
+
+        // Restore the status display after a short delay
+        setTimeout(() => {
+          updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+          screen.render();
+        }, 2000);
+
         screen.render();
       });
 
@@ -1523,7 +1549,7 @@ function updateTokenCount() {
   }
 
   // If in graph mode, add an estimate for the graph information
-  if (isGraphModeEnabled && selectedFiles.length > 0) {
+  if (currentMode === modeHandler.MODES.GRAPH && selectedFiles.length > 0) {
     // Rough estimate for graph information based on number of files
     tokenCount += selectedFiles.length * 50;
   }
@@ -1546,20 +1572,22 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
     escapeAction = 'Close template selection';
   }
 
-  // Add graph mode indicator if enabled
-  const graphModeIndicator = isGraphModeEnabled ? ' | {bold}Mode:{/bold} Graph Analysis' : '';
+  // Add mode indicator
+  const modeName = modeHandler.getModeName(currentMode);
+  const modeDisplay = ` | {bold}Mode:{/bold} ${modeName}`;
 
   const content = [
     `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` +
     (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : '') +
-    graphModeIndicator,
+    modeDisplay,
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}h:{/bold} Parent directory   {bold}l:{/bold} Enter directory',
     '  {bold}Vim-like:{/bold}       {bold}g:{/bold} Jump to top     {bold}G:{/bold} Jump to bottom     {bold}a:{/bold} Toggle all visible',
     '  {bold}UI Focus:{/bold}       {bold}Tab:{/bold} Switch panels   {bold}Space:{/bold} Select/Unselect',
     '  {bold}Selection:{/bold}      {bold}Space:{/bold} Toggle select  {bold}S-↑/↓:{/bold} Multi-select',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
-    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}q:{/bold} Quit',
+    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}m:{/bold} Change mode',
+  '  {bold}Exit:{/bold}           {bold}q:{/bold} Quit',
     `  {bold}Exit/Cancel:{/bold}    {bold}Esc:{/bold} ${escapeAction}`
   ].filter(line => line !== '').join('\n');
 
