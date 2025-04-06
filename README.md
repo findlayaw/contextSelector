@@ -13,6 +13,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 - Save and load selection templates
 - Graph mode for analyzing code relationships
 - Code Maps mode for extracting code structure
+- Multiple output formats (Markdown and XML)
 
 ## Installation
 
@@ -44,6 +45,9 @@ aw --search "filename"
 
 # Load a saved template
 aw --template "my-template"
+
+# Use XML output format instead of Markdown
+aw --xml
 ```
 
 ### Mode Selection
@@ -89,13 +93,57 @@ You can toggle between modes while the application is running by pressing `m`.
 - **s**: Save current selection as a template
 - **d**: Delete a template (when in template selection view)
 - **m**: Toggle between different modes (Standard, Graph Analysis, Code Maps)
+- **o**: Toggle output format (Markdown, XML) and file content inclusion for CodeMaps mode
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
 - **Escape**: Exit search mode, close template selection, or quit
 
-## Output Format
+## Output Formats
 
-The tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension.
+The tool supports multiple output formats:
+
+### Markdown Format (Default)
+
+By default, the tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension.
+
+### XML Format
+
+You can also use XML format by pressing `o` or using the `--xml` command line option. The XML format provides a more structured representation of the code context:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<context>
+  <directory_structure>
+    <![CDATA[
+    project/
+      src/
+        index.js
+        utils/
+          helper.js
+      package.json
+    ]]>
+  </directory_structure>
+
+  <files>
+    <file>
+      <path>src/index.js</path>
+      <language>javascript</language>
+      <content><![CDATA[
+      // Content of index.js
+      console.log('Hello, world!');
+      ]]></content>
+    </file>
+    <!-- More files... -->
+  </files>
+</context>
+```
+
+### Output Format Cycling
+
+You can cycle through available output formats by pressing the `o` key:
+
+- In Standard and Graph modes: Toggle between Markdown and XML
+- In CodeMaps mode: Cycle between "Structure Only" (default), "Markdown with Contents", and "XML with Contents"
 
 ## Application Modes
 
