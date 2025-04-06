@@ -153,13 +153,15 @@ function createComponents() {
     border: {
       type: 'line'
     },
-    label: ' Prompt (Shift+Enter for new line, Esc to close, Ctrl+S to Save Template) ',
+    label: ' Prompt (Enter for new line, Esc to close, Ctrl+S to Save Template) ',
     hidden: true,
     keys: true,
     mouse: true,
     inputOnFocus: true,
     tags: true,
     scrollable: true,
+    vi: false,  // Disable vi keys to prevent default Enter handling
+    censor: false,
     scrollbar: {
       ch: ' ',
       track: {

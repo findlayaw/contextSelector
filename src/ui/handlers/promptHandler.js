@@ -17,6 +17,28 @@ function showPromptInput(promptBox, screen) {
   // Load current prompt into the box
   promptBox.setValue(state.currentPrompt);
 
+  // Override the default _listener method to fix the Enter key issue
+  // This is a bit of a hack, but it's the most direct way to fix the issue
+  if (!promptBox._originalListener) {
+    promptBox._originalListener = promptBox._listener;
+
+    promptBox._listener = function(ch, key) {
+      // If Enter is pressed, handle it ourselves
+      if (key && key.name === 'enter') {
+        const currentValue = this.getValue();
+        const cursorPos = this.cursor;
+        const newValue = currentValue.substring(0, cursorPos) + '\n' + currentValue.substring(cursorPos);
+        this.setValue(newValue);
+        this.cursor = cursorPos + 1;
+        screen.render();
+        return;
+      }
+
+      // For all other keys, use the original listener
+      return promptBox._originalListener.call(this, ch, key);
+    };
+  }
+
   // Show the prompt box
   promptBox.hidden = false;
   promptBox.show();

@@ -1157,29 +1157,8 @@ function setupPromptBoxHandlers(promptBox, promptTemplateNameBox, screen) {
 
   // Handle escape to close prompt box (now handled in setupEscapeHandler)
 
-  // Handle Shift+Enter for newlines
-  promptBox.key('S-enter', () => {
-    // Insert a newline character at the current cursor position
-    const currentValue = promptBox.getValue();
-    const cursorPos = promptBox.cursor;
-    const newValue = currentValue.substring(0, cursorPos) + '\n' + currentValue.substring(cursorPos);
-    promptBox.setValue(newValue);
-    // Move cursor position after the newline
-    promptBox.cursor = cursorPos + 1;
-    screen.render();
-  });
-
-  // Make Enter just insert a newline as well
-  promptBox.key('enter', () => {
-    // Insert a newline character at the current cursor position
-    const currentValue = promptBox.getValue();
-    const cursorPos = promptBox.cursor;
-    const newValue = currentValue.substring(0, cursorPos) + '\n' + currentValue.substring(cursorPos);
-    promptBox.setValue(newValue);
-    // Move cursor position after the newline
-    promptBox.cursor = cursorPos + 1;
-    screen.render();
-  });
+  // We're now handling Enter and Shift+Enter in the promptHandler.js file
+  // by overriding the _listener method of the promptBox
 
   // Handle Ctrl+S for saving prompt template
   promptBox.key('C-s', () => {
