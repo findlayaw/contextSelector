@@ -125,7 +125,7 @@ function readFileContent(filePath) {
 /**
  * Format the directory tree as a string
  * @param {Object} tree - Directory tree object
- * @param {string} prefix - Prefix for indentation
+ * @param {string} prefix - Prefix for indentation (not used when showing full paths)
  * @returns {string} - Formatted directory tree
  */
 function formatDirectoryTree(tree, prefix = '') {
@@ -134,18 +134,18 @@ function formatDirectoryTree(tree, prefix = '') {
   let result = '';
 
   if (tree.type === 'directory') {
-    result += `${prefix}${tree.name}/\n`;
+    // Use the full path without indentation
+    result += `${tree.path}/\n`;
 
     if (tree.children && tree.children.length > 0) {
-      const childPrefix = prefix + '  ';
       for (let i = 0; i < tree.children.length; i++) {
-        const isLast = i === tree.children.length - 1;
         const childTree = tree.children[i];
-        result += formatDirectoryTree(childTree, childPrefix);
+        result += formatDirectoryTree(childTree, '');
       }
     }
   } else if (tree.type === 'file') {
-    result += `${prefix}${tree.name}\n`;
+    // Use the full path without indentation
+    result += `${tree.path}\n`;
   }
 
   return result;

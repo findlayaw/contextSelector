@@ -27,7 +27,7 @@ async function formatForLLM(selectedFiles, directoryTree) {
     const extension = path.extname(file.path).substring(1); // Remove the dot
 
     // Add file path as heading
-    result += `## ${file.relativePath}\n\n`;
+    result += `## ${file.path}\n\n`;
 
     // Add file content in fenced code block with language
     result += '```' + (extension || '') + '\n';
