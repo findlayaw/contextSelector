@@ -1,5 +1,5 @@
 /**
- * Graph formatter module for formatting code graph for LLM consumption
+ * Enhanced graph formatter module for formatting code graph for LLM consumption
  */
 const path = require('path');
 const fs = require('fs');
@@ -76,7 +76,8 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
         fileDependencies.get(sourceNode.id).push({
           id: targetNode.id,
-          name: path.basename(targetNode.path)
+          name: path.basename(targetNode.path),
+          importName: edge.importName || '*'
         });
       }
     }
@@ -93,13 +94,80 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
         result += '- None\n';
       } else {
         for (const dep of dependencies) {
-          result += `- ${dep.name} (${dep.id})\n`;
+          result += `- ${dep.name} (${dep.importName})\n`;
         }
       }
 
       result += '\n';
     }
   }
+
+  // Add horizontal rule as separator
+  result += '---\n\n';
+
+  // Add class hierarchy section
+  result += '# Class Hierarchy\n\n';
+
+  // Get all class nodes
+  const classNodes = codeGraph.nodes.filter(node => node.type === 'class');
+  
+  // Group classes by inheritance
+  const classHierarchy = new Map();
+  const rootClasses = [];
+  
+  for (const classNode of classNodes) {
+    const extendsEdges = codeGraph.edges.filter(edge => 
+      edge.source === classNode.id && edge.type === 'extends'
+    );
+    
+    if (extendsEdges.length > 0) {
+      for (const edge of extendsEdges) {
+        if (!classHierarchy.has(edge.target)) {
+          classHierarchy.set(edge.target, []);
+        }
+        classHierarchy.get(edge.target).push(classNode);
+      }
+    } else {
+      rootClasses.push(classNode);
+    }
+  }
+  
+  // Format class hierarchy
+  function formatClassHierarchy(classNode, level = 0) {
+    let hierarchyText = '';
+    const indent = '  '.repeat(level);
+    
+    hierarchyText += `${indent}- ${classNode.label} (${classNode.path})`;
+    
+    // Add methods and properties if available
+    if (classNode.methods && classNode.methods.length > 0) {
+      hierarchyText += ` [Methods: ${classNode.methods.join(', ')}]`;
+    }
+    
+    if (classNode.properties && classNode.properties.length > 0) {
+      hierarchyText += ` [Properties: ${classNode.properties.join(', ')}]`;
+    }
+    
+    hierarchyText += '\n';
+    
+    // Add child classes
+    const children = classHierarchy.get(classNode.id) || [];
+    for (const child of children) {
+      hierarchyText += formatClassHierarchy(child, level + 1);
+    }
+    
+    return hierarchyText;
+  }
+  
+  if (rootClasses.length > 0) {
+    for (const rootClass of rootClasses) {
+      result += formatClassHierarchy(rootClass);
+    }
+  } else {
+    result += 'No class hierarchy detected.\n';
+  }
+  
+  result += '\n';
 
   // Add horizontal rule as separator
   result += '---\n\n';
@@ -123,7 +191,10 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
         functionCalls.get(sourceNode.id).push({
           id: targetNode.id,
           name: targetNode.label,
-          path: targetNode.path
+          path: targetNode.path,
+          args: edge.args || '',
+          line: edge.line,
+          column: edge.column
         });
       }
     }
@@ -134,18 +205,80 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
     const funcNode = codeGraph.nodes.find(node => node.id === funcId);
     if (funcNode) {
       result += `## ${funcNode.label} (${funcNode.path})\n\n`;
+      
+      // Add function type and parameters if available
+      if (funcNode.functionType) {
+        result += `Type: ${funcNode.functionType}\n`;
+      }
+      
+      if (funcNode.params && funcNode.params.length > 0) {
+        result += `Parameters: ${funcNode.params.join(', ')}\n`;
+      }
+      
       result += 'Calls:\n';
 
       if (calls.length === 0) {
         result += '- None\n';
       } else {
         for (const call of calls) {
-          result += `- ${call.name} (${call.path})\n`;
+          let callText = `- ${call.name} (${path.basename(call.path)})`;
+          
+          if (call.args) {
+            callText += ` with args: ${call.args}`;
+          }
+          
+          if (call.line) {
+            callText += ` at line ${call.line}`;
+          }
+          
+          result += callText + '\n';
         }
       }
 
       result += '\n';
     }
+  }
+
+  // Add horizontal rule as separator
+  result += '---\n\n';
+
+  // Add variable usage section
+  result += '# Important Variables\n\n';
+  
+  // Get all variable nodes
+  const variableNodes = codeGraph.nodes.filter(node => node.type === 'variable');
+  
+  if (variableNodes.length > 0) {
+    for (const varNode of variableNodes) {
+      result += `## ${varNode.label} (${varNode.path})\n\n`;
+      
+      result += `Type: ${varNode.kind} ${varNode.valueType || ''}\n`;
+      
+      // Find references to this variable
+      const references = codeGraph.edges.filter(edge => 
+        (edge.source === varNode.id || edge.target === varNode.id) && 
+        edge.type !== 'defined_in'
+      );
+      
+      if (references.length > 0) {
+        result += 'Referenced by:\n';
+        
+        for (const ref of references) {
+          const otherNodeId = ref.source === varNode.id ? ref.target : ref.source;
+          const otherNode = codeGraph.nodes.find(node => node.id === otherNodeId);
+          
+          if (otherNode) {
+            result += `- ${otherNode.label} (${otherNode.type}) in ${path.basename(otherNode.path)}\n`;
+          }
+        }
+      } else {
+        result += 'No references found.\n';
+      }
+      
+      result += '\n';
+    }
+  } else {
+    result += 'No important variables detected.\n\n';
   }
 
   // Add horizontal rule as separator
@@ -180,54 +313,72 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 }
 
 /**
- * Format a Cypher query for the code graph
+ * Format a Cypher query for Neo4j from the code graph
  * @param {Object} codeGraph - Code graph object
  * @returns {string} - Cypher query
  */
 function formatCypherQuery(codeGraph) {
-  let query = '// Cypher query for importing the code graph into Neo4j\n\n';
-
+  let query = '';
+  
   // Create nodes
   for (const node of codeGraph.nodes) {
-    let properties = '';
+    query += `CREATE (n${node.id.replace(/[^a-zA-Z0-9]/g, '_')}:${node.type} {`;
+    
+    // Add properties
+    const props = [];
     for (const [key, value] of Object.entries(node)) {
-      if (key !== 'id' && key !== 'type' && value !== undefined) {
+      if (key !== 'node' && value !== undefined) { // Skip the AST node
         if (typeof value === 'string') {
-          properties += `${key}: "${value.replace(/"/g, '\\"')}", `;
+          props.push(`${key}: "${value.replace(/"/g, '\\"')}"`);
         } else if (Array.isArray(value)) {
-          properties += `${key}: [${value.map(v => `"${v}"`).join(', ')}], `;
+          props.push(`${key}: [${value.map(v => `"${v.replace(/"/g, '\\"')}"`).join(', ')}]`);
+        } else if (typeof value === 'object') {
+          props.push(`${key}: "${JSON.stringify(value).replace(/"/g, '\\"')}"`);
         } else {
-          properties += `${key}: ${JSON.stringify(value)}, `;
+          props.push(`${key}: ${value}`);
         }
       }
     }
-
-    // Remove trailing comma and space
-    if (properties.endsWith(', ')) {
-      properties = properties.slice(0, -2);
-    }
-
-    query += `CREATE (n:${node.type.charAt(0).toUpperCase() + node.type.slice(1)} {id: "${node.id}", ${properties}})\n`;
+    
+    query += props.join(', ');
+    query += '})\n';
   }
-
-  query += '\n';
-
+  
   // Create relationships
   for (const edge of codeGraph.edges) {
-    query += `MATCH (a), (b) WHERE a.id = "${edge.source}" AND b.id = "${edge.target}"\n`;
-    query += `CREATE (a)-[:${edge.type.toUpperCase()}]->(b)\n`;
+    const sourceId = edge.source.replace(/[^a-zA-Z0-9]/g, '_');
+    const targetId = edge.target.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    query += `CREATE (n${sourceId})-[:${edge.type} {`;
+    
+    // Add properties
+    const props = [];
+    for (const [key, value] of Object.entries(edge)) {
+      if (key !== 'source' && key !== 'target' && key !== 'type' && key !== 'id' && value !== undefined) {
+        if (typeof value === 'string') {
+          props.push(`${key}: "${value.replace(/"/g, '\\"')}"`);
+        } else if (typeof value === 'boolean') {
+          props.push(`${key}: ${value}`);
+        } else {
+          props.push(`${key}: ${value}`);
+        }
+      }
+    }
+    
+    query += props.join(', ');
+    query += `}]->(n${targetId})\n`;
   }
-
+  
   return query;
 }
 
 /**
- * Format a graph in S-expression format
+ * Format an S-expression from the code graph
  * @param {Object} codeGraph - Code graph object
  * @returns {string} - S-expression
  */
 function formatSExpression(codeGraph) {
-  let result = '(graph\n';
+  let result = '(code-graph\n';
 
   // Add nodes
   result += '  (nodes\n';
@@ -236,7 +387,7 @@ function formatSExpression(codeGraph) {
 
     // Add other properties
     for (const [key, value] of Object.entries(node)) {
-      if (key !== 'id' && key !== 'type' && key !== 'label' && value !== undefined) {
+      if (key !== 'id' && key !== 'type' && key !== 'label' && key !== 'node' && value !== undefined) {
         if (typeof value === 'string') {
           result += ` :${key} "${value}"`;
         } else if (Array.isArray(value)) {
