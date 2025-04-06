@@ -7,6 +7,7 @@ const tokenCounter = require('../utils/tokenCounter');
 const templateManager = require('../templates/manager');
 const graphAnalyzer = require('../graph/analyzer');
 const modeHandler = require('./modeHandler');
+const outputHandler = require('./outputHandler');
 
 // Store the currently selected files
 let selectedFiles = [];
@@ -38,6 +39,12 @@ let activeBox = 'treeBox';
 // Current application mode
 let currentMode = modeHandler.MODES.STANDARD;
 
+// CodeMaps options
+let includeContents = false;
+
+// Current output format
+let currentOutputFormat = outputHandler.OUTPUT_FORMATS.MARKDOWN;
+
 /**
  * Start the terminal UI
  * @param {Object} options - UI options
@@ -45,7 +52,22 @@ let currentMode = modeHandler.MODES.STANDARD;
  */
 async function start(options) {
   // Set initial mode based on options
-  currentMode = options.graphMode ? modeHandler.MODES.GRAPH : modeHandler.MODES.STANDARD;
+  if (options.graphMode) {
+    currentMode = modeHandler.MODES.GRAPH;
+  } else if (options.codeMapsMode) {
+    currentMode = modeHandler.MODES.CODEMAPS;
+    // Store the includeContents option
+    includeContents = options.includeContents || false;
+  } else {
+    currentMode = modeHandler.MODES.STANDARD;
+  }
+
+  // Set initial output format based on options
+  if (options.xmlOutput) {
+    currentOutputFormat = outputHandler.OUTPUT_FORMATS.XML;
+  } else {
+    currentOutputFormat = outputHandler.OUTPUT_FORMATS.MARKDOWN;
+  }
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -281,7 +303,16 @@ async function start(options) {
       // Handle key events
       screen.key(['q', 'C-c'], () => {
         screen.destroy();
-        resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
+        resolve({
+          selectedFiles: [],
+          directoryTree: null,
+          tokenCount: 0,
+          saveTemplate: null,
+          templateFiles: null,
+          mode: currentMode,
+          includeContents: includeContents,
+          outputFormat: currentOutputFormat
+        });
       });
 
       screen.key('enter', () => {
@@ -574,7 +605,9 @@ async function start(options) {
             tokenCount,
             saveTemplate: templateToSave,
             templateFiles: templateFiles.length > 0 ? templateFiles : null,
-            mode: currentMode
+            mode: currentMode,
+            includeContents: includeContents,
+            outputFormat: currentOutputFormat
           });
         }
       });
@@ -630,7 +663,16 @@ async function start(options) {
         } else {
           // Regular escape behavior (quit) - only when not in search mode or template selection
           screen.destroy();
-          resolve({ selectedFiles: [], directoryTree: null, tokenCount: 0, saveTemplate: null, templateFiles: null, mode: currentMode });
+          resolve({
+            selectedFiles: [],
+            directoryTree: null,
+            tokenCount: 0,
+            saveTemplate: null,
+            templateFiles: null,
+            mode: currentMode,
+            includeContents: includeContents,
+            outputFormat: currentOutputFormat
+          });
         }
       });
 
@@ -1097,6 +1139,34 @@ async function start(options) {
         screen.render();
       });
 
+      // Add 'o' key handler to switch between output formats
+      screen.key('o', () => {
+        // Get the next output format and content inclusion setting
+        const nextOutput = outputHandler.getNextOutput(currentOutputFormat, currentMode, includeContents);
+
+        // Update the current output format and content inclusion setting
+        currentOutputFormat = nextOutput.format;
+        includeContents = nextOutput.includeContents;
+
+        // Update the status display to show the new output format
+        updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+
+        // Update token count as it may change based on output format
+        updateTokenCount();
+
+        // Show a notification about the output format change
+        const outputName = outputHandler.getOutputName(currentOutputFormat, includeContents, currentMode);
+        statusBox.setContent(`{bold}Output format changed to:{/bold} ${outputName}\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox));
+
+        // Restore the status display after a short delay
+        setTimeout(() => {
+          updateStatus(statusBox, isSearchActive, false, templateSelectBox);
+          screen.render();
+        }, 2000);
+
+        screen.render();
+      });
+
       // Add key handlers for infoBox
       infoBox.on('focus', () => {
         activeBox = 'infoBox';
@@ -1548,10 +1618,31 @@ function updateTokenCount() {
     tokenCount += 20; // Rough estimate for file header and formatting
   }
 
-  // If in graph mode, add an estimate for the graph information
-  if (currentMode === modeHandler.MODES.GRAPH && selectedFiles.length > 0) {
-    // Rough estimate for graph information based on number of files
-    tokenCount += selectedFiles.length * 50;
+  // Add mode-specific token estimates
+  if (selectedFiles.length > 0) {
+    if (currentMode === modeHandler.MODES.GRAPH) {
+      // Rough estimate for graph information based on number of files
+      tokenCount += selectedFiles.length * 50;
+    } else if (currentMode === modeHandler.MODES.CODEMAPS) {
+      if (!includeContents) {
+        // In CodeMaps mode without file contents, we only include structure
+        // So we subtract the tokens from the file contents and add a smaller amount for structure
+        for (const file of selectedFiles) {
+          const content = fileSystem.readFileContent(file.path);
+          // Subtract the tokens we already counted for this file's content
+          tokenCount -= tokenCounter.countTokens(content);
+        }
+
+        // Add tokens for the code structure information (much smaller than full content)
+        tokenCount += selectedFiles.length * 25;
+
+        // Add a small fixed amount for the file list
+        tokenCount += 50;
+      } else {
+        // If including file contents, add tokens for the structure on top of file contents
+        tokenCount += selectedFiles.length * 25;
+      }
+    }
   }
 }
 
@@ -1574,7 +1665,8 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
 
   // Add mode indicator
   const modeName = modeHandler.getModeName(currentMode);
-  const modeDisplay = ` | {bold}Mode:{/bold} ${modeName}`;
+  const outputName = outputHandler.getOutputName(currentOutputFormat, includeContents, currentMode);
+  const modeDisplay = ` | {bold}Mode:{/bold} ${modeName} | {bold}Output:{/bold} ${outputName}`;
 
   const content = [
     `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` +
@@ -1586,7 +1678,7 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
     '  {bold}UI Focus:{/bold}       {bold}Tab:{/bold} Switch panels   {bold}Space:{/bold} Select/Unselect',
     '  {bold}Selection:{/bold}      {bold}Space:{/bold} Toggle select  {bold}S-↑/↓:{/bold} Multi-select',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
-    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}m:{/bold} Change mode',
+    '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}m:{/bold} Change mode       {bold}o:{/bold} Output format',
   '  {bold}Exit:{/bold}           {bold}q:{/bold} Quit',
     `  {bold}Exit/Cancel:{/bold}    {bold}Esc:{/bold} ${escapeAction}`
   ].filter(line => line !== '').join('\n');
