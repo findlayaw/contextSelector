@@ -11,6 +11,8 @@ const outputHandler = require('./outputHandler');
 
 // Store the currently selected files
 let selectedFiles = [];
+// Store selected empty directories
+let selectedEmptyDirs = [];
 let directoryTree = null;
 let tokenCount = 0;
 
@@ -258,27 +260,36 @@ async function start(options) {
       if (options.template) {
         const template = await templateManager.loadTemplate(options.template);
         if (template && template.files) {
-          // Check if each file in the template exists
+          // Check if each file/directory in the template exists
           const validSelectedFiles = [];
-          const missingFiles = [];
+          const validSelectedEmptyDirs = [];
+          const missingItems = [];
 
-          for (const fileFromTemplate of template.files) {
-            // Check if the file path stored in the template actually exists
-            if (fs.existsSync(fileFromTemplate.path)) {
-              validSelectedFiles.push(fileFromTemplate);
+          for (const itemFromTemplate of template.files) {
+            // Check if the path stored in the template actually exists
+            if (fs.existsSync(itemFromTemplate.path)) {
+              // Check if it's a file or directory
+              const stats = fs.statSync(itemFromTemplate.path);
+              if (stats.isFile()) {
+                validSelectedFiles.push(itemFromTemplate);
+              } else if (stats.isDirectory() && (!itemFromTemplate.children || itemFromTemplate.children.length === 0)) {
+                // It's an empty directory
+                validSelectedEmptyDirs.push(itemFromTemplate);
+              }
             } else {
-              // Keep track of files that couldn't be found
-              missingFiles.push(fileFromTemplate.relativePath || fileFromTemplate.path);
+              // Keep track of items that couldn't be found
+              missingItems.push(itemFromTemplate.relativePath || itemFromTemplate.path);
             }
           }
 
           selectedFiles = validSelectedFiles; // Assign only the files that were found
+          selectedEmptyDirs = validSelectedEmptyDirs; // Assign only the empty directories that were found
 
-          // Notify the user if some files were missing
-          if (missingFiles.length > 0) {
-            const missingFilesList = missingFiles.join('\n  - ');
+          // Notify the user if some items were missing
+          if (missingItems.length > 0) {
+            const missingItemsList = missingItems.join('\n  - ');
             // Temporarily show a message in the status box
-            statusBox.setContent(`{yellow-fg}Warning: The following files from the template were not found and were skipped:{/yellow-fg}\n  - ${missingFilesList}\n\n(Loading remaining files...)`);
+            statusBox.setContent(`{yellow-fg}Warning: The following items from the template were not found and were skipped:{/yellow-fg}\n  - ${missingItemsList}\n\n(Loading remaining files...)`);
             screen.render(); // Render the temporary message
             // Wait a bit before showing the final status update
             await new Promise(resolve => setTimeout(resolve, 3000)); // Show warning for 3 seconds
@@ -305,6 +316,7 @@ async function start(options) {
         screen.destroy();
         resolve({
           selectedFiles: [],
+          selectedEmptyDirs: [],
           directoryTree: null,
           tokenCount: 0,
           saveTemplate: null,
@@ -587,7 +599,7 @@ async function start(options) {
       });
 
       screen.key('s', () => {
-        if (selectedFiles.length > 0) {
+        if (selectedFiles.length > 0 || selectedEmptyDirs.length > 0) {
           // Ensure the template name box is properly shown
           templateNameBox.hidden = false;
           templateNameBox.show();
@@ -597,10 +609,11 @@ async function start(options) {
       });
 
       screen.key('c', () => {
-        if (selectedFiles.length > 0) {
+        if (selectedFiles.length > 0 || selectedEmptyDirs.length > 0) {
           screen.destroy();
           resolve({
             selectedFiles,
+            selectedEmptyDirs,
             directoryTree,
             tokenCount,
             saveTemplate: templateToSave,
@@ -665,6 +678,7 @@ async function start(options) {
           screen.destroy();
           resolve({
             selectedFiles: [],
+            selectedEmptyDirs: [],
             directoryTree: null,
             tokenCount: 0,
             saveTemplate: null,
@@ -695,10 +709,13 @@ async function start(options) {
         treeBox.focus();
 
         if (templateName) {
-          // Save the template name and take a snapshot of currently selected files
+          // Save the template name and take a snapshot of currently selected files and empty directories
           templateToSave = templateName;
-          // Create a deep copy of the selected files to save in the template
+          // Create a deep copy of the selected files and empty directories to save in the template
           templateFiles = JSON.parse(JSON.stringify(selectedFiles));
+          // Add selected empty directories to the template files
+          const emptyDirsCopy = JSON.parse(JSON.stringify(selectedEmptyDirs));
+          templateFiles = templateFiles.concat(emptyDirsCopy);
 
           // Show a notification that the template will be saved
           statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + updateStatus(statusBox, isSearchActive, true, templateSelectBox));
@@ -769,27 +786,36 @@ async function start(options) {
 
         const template = await templateManager.loadTemplate(templateName);
         if (template && template.files) {
-          // Check if each file in the template exists
+          // Check if each file/directory in the template exists
           const validSelectedFiles = [];
-          const missingFiles = [];
+          const validSelectedEmptyDirs = [];
+          const missingItems = [];
 
-          for (const fileFromTemplate of template.files) {
-            // Check if the file path stored in the template actually exists
-            if (fs.existsSync(fileFromTemplate.path)) {
-              validSelectedFiles.push(fileFromTemplate);
+          for (const itemFromTemplate of template.files) {
+            // Check if the path stored in the template actually exists
+            if (fs.existsSync(itemFromTemplate.path)) {
+              // Check if it's a file or directory
+              const stats = fs.statSync(itemFromTemplate.path);
+              if (stats.isFile()) {
+                validSelectedFiles.push(itemFromTemplate);
+              } else if (stats.isDirectory() && (!itemFromTemplate.children || itemFromTemplate.children.length === 0)) {
+                // It's an empty directory
+                validSelectedEmptyDirs.push(itemFromTemplate);
+              }
             } else {
-              // Keep track of files that couldn't be found
-              missingFiles.push(fileFromTemplate.relativePath || fileFromTemplate.path);
+              // Keep track of items that couldn't be found
+              missingItems.push(itemFromTemplate.relativePath || itemFromTemplate.path);
             }
           }
 
           selectedFiles = validSelectedFiles; // Assign only the files that were found
+          selectedEmptyDirs = validSelectedEmptyDirs; // Assign only the empty directories that were found
 
-          // Notify the user if some files were missing
-          if (missingFiles.length > 0) {
-            const missingFilesList = missingFiles.join('\n  - ');
+          // Notify the user if some items were missing
+          if (missingItems.length > 0) {
+            const missingItemsList = missingItems.join('\n  - ');
             // Temporarily show a message in the status box
-            statusBox.setContent(`{yellow-fg}Warning: The following files from the template were not found and were skipped:{/yellow-fg}\n  - ${missingFilesList}\n\n(Loading remaining files...)`);
+            statusBox.setContent(`{yellow-fg}Warning: The following items from the template were not found and were skipped:{/yellow-fg}\n  - ${missingItemsList}\n\n(Loading remaining files...)`);
             screen.render(); // Render the temporary message
             // Wait a bit before showing the final status update
             await new Promise(resolve => setTimeout(resolve, 3000)); // Show warning for 3 seconds
@@ -1430,8 +1456,10 @@ function toggleFileSelection(node) {
 function areAllFilesInDirectorySelected(node) {
   if (!node || node.type !== 'directory') return false;
 
-  // If there are no children, consider it not fully selected
-  if (!node.children || node.children.length === 0) return false;
+  // If there are no children, check if this empty directory is in the selectedEmptyDirs array
+  if (!node.children || node.children.length === 0) {
+    return selectedEmptyDirs.some(dir => dir.path === node.path);
+  }
 
   // Check all children
   for (const child of node.children) {
@@ -1462,29 +1490,44 @@ function selectAllFilesInDirectory(node) {
   // Check if all files are already selected
   const allSelected = areAllFilesInDirectorySelected(node);
 
-  // Process all children
-  if (node.children && node.children.length > 0) {
-    for (const child of node.children) {
-      if (child.type === 'file') {
-        // If all files are selected, deselect this file
-        // Otherwise, select this file if it's not already selected
-        if (allSelected) {
-          const index = selectedFiles.findIndex(f => f.path === child.path);
-          if (index !== -1) {
-            selectedFiles.splice(index, 1);
-          }
-        } else if (!isFileSelected(child)) {
-          selectedFiles.push(child);
+  // Handle empty directories
+  if (!node.children || node.children.length === 0) {
+    if (allSelected) {
+      // If already selected, remove from selectedEmptyDirs
+      const index = selectedEmptyDirs.findIndex(dir => dir.path === node.path);
+      if (index !== -1) {
+        selectedEmptyDirs.splice(index, 1);
+      }
+    } else {
+      // If not selected, add to selectedEmptyDirs
+      if (!selectedEmptyDirs.some(dir => dir.path === node.path)) {
+        selectedEmptyDirs.push(node);
+      }
+    }
+    return;
+  }
+
+  // Process children for non-empty directories
+  for (const child of node.children) {
+    if (child.type === 'file') {
+      // If all files are selected, deselect this file
+      // Otherwise, select this file if it's not already selected
+      if (allSelected) {
+        const index = selectedFiles.findIndex(f => f.path === child.path);
+        if (index !== -1) {
+          selectedFiles.splice(index, 1);
         }
-      } else if (child.type === 'directory') {
-        // Recursively process subdirectories with the same selection state
-        if (allSelected) {
-          // Deselect all files in subdirectory
-          deselectAllFilesInDirectory(child);
-        } else {
-          // Select all files in subdirectory
-          selectAllFilesInSubdirectory(child);
-        }
+      } else if (!isFileSelected(child)) {
+        selectedFiles.push(child);
+      }
+    } else if (child.type === 'directory') {
+      // Recursively process subdirectories with the same selection state
+      if (allSelected) {
+        // Deselect all files in subdirectory
+        deselectAllFilesInDirectory(child);
+      } else {
+        // Select all files in subdirectory
+        selectAllFilesInSubdirectory(child);
       }
     }
   }
@@ -1497,18 +1540,25 @@ function selectAllFilesInDirectory(node) {
 function selectAllFilesInSubdirectory(node) {
   if (!node || node.type !== 'directory') return;
 
-  // Process all children
-  if (node.children && node.children.length > 0) {
-    for (const child of node.children) {
-      if (child.type === 'file') {
-        // Add the file if it's not already selected
-        if (!isFileSelected(child)) {
-          selectedFiles.push(child);
-        }
-      } else if (child.type === 'directory') {
-        // Recursively process subdirectories
-        selectAllFilesInSubdirectory(child);
+  // Handle empty directories
+  if (!node.children || node.children.length === 0) {
+    // Add to selectedEmptyDirs if not already there
+    if (!selectedEmptyDirs.some(dir => dir.path === node.path)) {
+      selectedEmptyDirs.push(node);
+    }
+    return;
+  }
+
+  // Process children for non-empty directories
+  for (const child of node.children) {
+    if (child.type === 'file') {
+      // Add the file if it's not already selected
+      if (!isFileSelected(child)) {
+        selectedFiles.push(child);
       }
+    } else if (child.type === 'directory') {
+      // Recursively process subdirectories
+      selectAllFilesInSubdirectory(child);
     }
   }
 }
@@ -1520,19 +1570,27 @@ function selectAllFilesInSubdirectory(node) {
 function deselectAllFilesInDirectory(node) {
   if (!node || node.type !== 'directory') return;
 
-  // Process all children
-  if (node.children && node.children.length > 0) {
-    for (const child of node.children) {
-      if (child.type === 'file') {
-        // Remove the file if it's selected
-        const index = selectedFiles.findIndex(f => f.path === child.path);
-        if (index !== -1) {
-          selectedFiles.splice(index, 1);
-        }
-      } else if (child.type === 'directory') {
-        // Recursively process subdirectories
-        deselectAllFilesInDirectory(child);
+  // Handle empty directories
+  if (!node.children || node.children.length === 0) {
+    // Remove from selectedEmptyDirs if present
+    const index = selectedEmptyDirs.findIndex(dir => dir.path === node.path);
+    if (index !== -1) {
+      selectedEmptyDirs.splice(index, 1);
+    }
+    return;
+  }
+
+  // Process children for non-empty directories
+  for (const child of node.children) {
+    if (child.type === 'file') {
+      // Remove the file if it's selected
+      const index = selectedFiles.findIndex(f => f.path === child.path);
+      if (index !== -1) {
+        selectedFiles.splice(index, 1);
       }
+    } else if (child.type === 'directory') {
+      // Recursively process subdirectories
+      deselectAllFilesInDirectory(child);
     }
   }
 }
