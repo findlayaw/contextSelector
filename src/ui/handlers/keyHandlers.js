@@ -10,6 +10,7 @@ const statusView = require('../components/statusView');
 const searchHandler = require('./searchHandler');
 const selectionHandler = require('./selectionHandler');
 const templateHandler = require('./templateHandler');
+const promptHandler = require('./promptHandler');
 const search = require('../../utils/search');
 
 /**
@@ -21,7 +22,9 @@ const search = require('../../utils/search');
 function setupKeyHandlers(screen, components, resolvePromise) {
   const {
     treeBox, infoBox, statusBox, searchBox,
-    templateNameBox, templateSelectBox, confirmationBox
+    templateNameBox, confirmationBox, promptBox,
+    promptTemplateNameBox, templateLoaderBox,
+    fileTemplateList, promptTemplateList
   } = components;
 
   const state = stateManager.getState();
@@ -146,7 +149,7 @@ function setupKeyHandlers(screen, components, resolvePromise) {
     }
 
     // Handle single selection
-    handleSpaceSelection(treeBox, infoBox, statusBox, templateSelectBox, screen);
+    handleSpaceSelection(treeBox, infoBox, statusBox, templateLoaderBox, screen);
   });
 
   // Handle search key
@@ -160,7 +163,8 @@ function setupKeyHandlers(screen, components, resolvePromise) {
 
   // Handle template selection key
   screen.key('t', async () => {
-    await templateHandler.showTemplateSelection(templateSelectBox);
+    // Show the new template loader instead of the old template selection box
+    await promptHandler.showTemplateLoader(templateLoaderBox, fileTemplateList, promptTemplateList, screen);
     screen.render();
   });
 
@@ -187,10 +191,9 @@ function setupKeyHandlers(screen, components, resolvePromise) {
   setupSearchBoxHandlers(searchBox, treeBox, statusBox, screen);
 
   // Handle template name box events
-  setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, screen, templateSelectBox);
+  setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, screen, templateLoaderBox);
 
-  // Handle template selection box events
-  setupTemplateSelectionBoxHandlers(templateSelectBox, treeBox, infoBox, statusBox, confirmationBox, screen);
+  // Template selection box handlers are now handled by setupTemplateLoaderHandlers
 
   // Add key handlers for up/down navigation to maintain padding
   setupNavigationHandlers(treeBox, screen);
@@ -199,25 +202,37 @@ function setupKeyHandlers(screen, components, resolvePromise) {
   setupVimNavigationHandlers(screen, treeBox);
 
   // Add 'a' key to toggle selection of all visible files
-  setupToggleAllHandler(screen, treeBox, infoBox, statusBox, templateSelectBox);
+  setupToggleAllHandler(screen, treeBox, infoBox, statusBox, templateLoaderBox);
 
   // Add shift+arrow keys for multi-selection highlighting
   setupMultiSelectionHandlers(screen, treeBox);
+
+  // Add 'p' key handler to show prompt input box
+  setupPromptHandler(screen, promptBox);
 
   // Add Tab key handler to toggle focus between treeBox and infoBox
   setupTabHandler(screen, treeBox, infoBox, statusBox);
 
   // Add 'm' key handler to switch between modes
-  setupModeHandler(screen, statusBox, templateSelectBox);
+  setupModeHandler(screen, statusBox, templateLoaderBox);
 
   // Add 'o' key handler to switch between output formats
-  setupOutputFormatHandler(screen, statusBox, templateSelectBox);
+  setupOutputFormatHandler(screen, statusBox, templateLoaderBox);
 
   // Add key handlers for infoBox
   setupInfoBoxHandlers(infoBox, treeBox, screen);
 
+  // Add key handlers for promptBox
+  setupPromptBoxHandlers(promptBox, promptTemplateNameBox, screen);
+
+  // Add key handlers for promptTemplateNameBox
+  setupPromptTemplateNameBoxHandlers(promptTemplateNameBox, promptBox, statusBox, screen);
+
+  // Add key handlers for templateLoaderBox
+  setupTemplateLoaderHandlers(templateLoaderBox, fileTemplateList, promptTemplateList, treeBox, infoBox, statusBox, confirmationBox, screen);
+
   // Add escape key handler
-  setupEscapeHandler(screen, templateSelectBox, resolvePromise);
+  setupEscapeHandler(screen, templateLoaderBox, promptBox, promptTemplateNameBox, treeBox, statusBox, resolvePromise);
 }
 
 /**
@@ -425,9 +440,9 @@ function setupSearchBoxHandlers(searchBox, treeBox, statusBox, screen) {
  * @param {Object} treeBox - Tree box component
  * @param {Object} statusBox - Status box component
  * @param {Object} screen - Blessed screen
- * @param {Object} templateSelectBox - Template selection box component
+ * @param {Object} templateLoaderBox - Template loader box component
  */
-function setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, screen, templateSelectBox) {
+function setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, screen, templateLoaderBox) {
   const state = stateManager.getState();
 
   // Handle escape and ctrl+c to cancel template name input
@@ -450,7 +465,7 @@ function setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, scree
     treeBox.focus();
 
     if (templateName) {
-      templateHandler.saveTemplateInfo(templateName, statusBox, state.isSearchActive, templateSelectBox);
+      templateHandler.saveTemplateInfo(templateName, statusBox, state.isSearchActive, templateLoaderBox);
       // Force a complete redraw of the screen
       screen.clearRegion(0, screen.width, 0, screen.height);
       screen.render();
@@ -463,7 +478,7 @@ function setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, scree
 }
 
 /**
- * Setup template selection box event handlers
+ * Setup template selection box event handlers (DEPRECATED - replaced by templateLoaderHandlers)
  * @param {Object} templateSelectBox - Template selection box component
  * @param {Object} treeBox - Tree box component
  * @param {Object} infoBox - Info box component
@@ -471,7 +486,8 @@ function setupTemplateNameBoxHandlers(templateNameBox, treeBox, statusBox, scree
  * @param {Object} confirmationBox - Confirmation box component
  * @param {Object} screen - Blessed screen
  */
-function setupTemplateSelectionBoxHandlers(templateSelectBox, treeBox, infoBox, statusBox, confirmationBox, screen) {
+// This function is no longer used, but kept for reference
+/* function _deprecatedSetupTemplateSelectionBoxHandlers(templateSelectBox, treeBox, infoBox, statusBox, confirmationBox, screen) {
   // Handle escape and ctrl+c to close template selection
   templateSelectBox.key(['escape', 'C-c'], () => {
     // Ensure the template selection box is completely hidden
@@ -528,7 +544,7 @@ function setupTemplateSelectionBoxHandlers(templateSelectBox, treeBox, infoBox, 
     templateSelectBox.hidden = true;
     treeBox.focus();
 
-    await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateSelectBox);
+    await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
 
     // Force a complete redraw of the screen
     screen.clearRegion(0, screen.width, 0, screen.height);
@@ -867,6 +883,15 @@ function setupTabHandler(screen, treeBox, infoBox, statusBox) {
   const state = stateManager.getState();
 
   screen.key('tab', () => {
+    // Get components from the current scope
+    const components = screen.children;
+    const templateLoaderBoxComponent = components.find(c => c.options && c.options.label && c.options.label.includes('Template Loader'));
+
+    // Skip if template loader is visible - let its own tab handler handle it
+    if (templateLoaderBoxComponent && !templateLoaderBoxComponent.hidden) {
+      return;
+    }
+
     // Toggle active box
     if (state.activeBox === 'treeBox') {
       // Switch to infoBox if there are selected files
@@ -894,9 +919,9 @@ function setupTabHandler(screen, treeBox, infoBox, statusBox) {
  * Setup mode handler for the 'm' key
  * @param {Object} screen - Blessed screen
  * @param {Object} statusBox - Status box component
- * @param {Object} templateSelectBox - Template selection box component
+ * @param {Object} templateLoaderBox - Template loader box component
  */
-function setupModeHandler(screen, statusBox, templateSelectBox) {
+function setupModeHandler(screen, statusBox, templateLoaderBox) {
   const state = stateManager.getState();
   const modeHandler = require('../modeHandler');
 
@@ -905,18 +930,18 @@ function setupModeHandler(screen, statusBox, templateSelectBox) {
     state.currentMode = modeHandler.getNextMode(state.currentMode);
 
     // Update the status display to show the new mode
-    statusView.updateStatus(statusBox, state.isSearchActive, false, templateSelectBox);
+    statusView.updateStatus(statusBox, state.isSearchActive, false, templateLoaderBox);
 
     // Update token count as it may change based on mode
     selectionView.updateTokenCount();
 
     // Show a notification about the mode change
     const modeName = modeHandler.getModeName(state.currentMode);
-    statusBox.setContent(`{bold}Mode changed to:{/bold} ${modeName}\n\n` + statusView.updateStatus(statusBox, state.isSearchActive, true, templateSelectBox));
+    statusBox.setContent(`{bold}Mode changed to:{/bold} ${modeName}\n\n` + statusView.updateStatus(statusBox, state.isSearchActive, true, templateLoaderBox));
 
     // Restore the status display after a short delay
     setTimeout(() => {
-      statusView.updateStatus(statusBox, state.isSearchActive, false, templateSelectBox);
+      statusView.updateStatus(statusBox, state.isSearchActive, false);
       screen.render();
     }, 2000);
 
@@ -928,9 +953,9 @@ function setupModeHandler(screen, statusBox, templateSelectBox) {
  * Setup output format handler for the 'o' key
  * @param {Object} screen - Blessed screen
  * @param {Object} statusBox - Status box component
- * @param {Object} templateSelectBox - Template selection box component
+ * @param {Object} templateLoaderBox - Template loader box component
  */
-function setupOutputFormatHandler(screen, statusBox, templateSelectBox) {
+function setupOutputFormatHandler(screen, statusBox, templateLoaderBox) {
   const state = stateManager.getState();
   const outputHandler = require('../outputHandler');
 
@@ -943,18 +968,18 @@ function setupOutputFormatHandler(screen, statusBox, templateSelectBox) {
     state.includeContents = nextOutput.includeContents;
 
     // Update the status display to show the new output format
-    statusView.updateStatus(statusBox, state.isSearchActive, false, templateSelectBox);
+    statusView.updateStatus(statusBox, state.isSearchActive, false, templateLoaderBox);
 
     // Update token count as it may change based on output format
     selectionView.updateTokenCount();
 
     // Show a notification about the output format change
     const outputName = outputHandler.getOutputName(state.currentOutputFormat, state.includeContents, state.currentMode);
-    statusBox.setContent(`{bold}Output format changed to:{/bold} ${outputName}\n\n` + statusView.updateStatus(statusBox, state.isSearchActive, true, templateSelectBox));
+    statusBox.setContent(`{bold}Output format changed to:{/bold} ${outputName}\n\n` + statusView.updateStatus(statusBox, state.isSearchActive, true, templateLoaderBox));
 
     // Restore the status display after a short delay
     setTimeout(() => {
-      statusView.updateStatus(statusBox, state.isSearchActive, false, templateSelectBox);
+      statusView.updateStatus(statusBox, state.isSearchActive, false);
       screen.render();
     }, 2000);
 
@@ -1027,10 +1052,14 @@ function setupInfoBoxHandlers(infoBox, treeBox, screen) {
 /**
  * Setup escape handler
  * @param {Object} screen - Blessed screen
- * @param {Object} templateSelectBox - Template selection box component
+ * @param {Object} templateLoaderBox - Template loader box component
+ * @param {Object} promptBox - Prompt box component
+ * @param {Object} promptTemplateNameBox - Prompt template name box component
+ * @param {Object} treeBox - Tree box component
+ * @param {Object} statusBox - Status box component
  * @param {Function} resolvePromise - Function to resolve the terminal promise
  */
-function setupEscapeHandler(screen, templateSelectBox, resolvePromise) {
+function setupEscapeHandler(screen, templateLoaderBox, promptBox, promptTemplateNameBox, treeBox, statusBox, resolvePromise) {
   const state = stateManager.getState();
 
   screen.key('escape', () => {
@@ -1040,21 +1069,333 @@ function setupEscapeHandler(screen, templateSelectBox, resolvePromise) {
       state.searchResults = [];
       state.searchListToNodeMap = []; // Clear the search list to node map
       treeView.renderTree(treeBox, state.originalTree);
-      statusView.updateStatus(statusBox, false, false, templateSelectBox);
+      statusView.updateStatus(statusBox, false, false, templateLoaderBox);
       screen.render();
-    } else if (!templateSelectBox.hidden) {
-      // Close the template selection UI and return to main UI
-      templateSelectBox.hide();
-      templateSelectBox.hidden = true;
+    } else if (!templateLoaderBox.hidden) {
+      // Close the template loader UI and return to main UI
+      templateLoaderBox.hidden = true;
+      templateLoaderBox.hide();
       treeBox.focus();
       // Force a complete redraw of the screen
       screen.clearRegion(0, screen.width, 0, screen.height);
       screen.render();
+    } else if (!promptBox.hidden) {
+      // Close the prompt box and return to main UI
+      // Save the current prompt content to state first
+      state.currentPrompt = promptBox.getValue();
+      promptBox.hidden = true;
+      promptBox.hide();
+      treeBox.focus();
+      screen.render();
+    } else if (!promptTemplateNameBox.hidden) {
+      // Close the prompt template name box and return to prompt box
+      promptTemplateNameBox.hidden = true;
+      promptTemplateNameBox.hide();
+      promptBox.show();
+      promptBox.focus();
+      screen.render();
     } else {
-      // Regular escape behavior (quit) - only when not in search mode or template selection
+      // Regular escape behavior (quit) - only when not in any special mode
       screen.destroy();
       resolvePromise(stateManager.getEmptyResult());
     }
+  });
+}
+
+/**
+ * Setup prompt handler for 'p' key
+ * @param {Object} screen - Blessed screen
+ * @param {Object} promptBox - Prompt box component
+ * @param {Object} treeBox - Tree box component (not used but kept for consistency)
+ * @param {Object} infoBox - Info box component (not used but kept for consistency)
+ * @param {Object} statusBox - Status box component (not used but kept for consistency)
+ */
+function setupPromptHandler(screen, promptBox) {
+  screen.key('p', () => {
+    // Get components from the current scope
+    const components = screen.children;
+    // Find the components we need to check
+    const searchBoxComponent = components.find(c => c.options && c.options.label === ' Search ');
+    const templateNameBoxComponent = components.find(c => c.options && c.options.label === ' Save Template As ');
+    const promptTemplateNameBoxComponent = components.find(c => c.options && c.options.label === ' Save Prompt Template As ');
+    const templateLoaderBoxComponent = components.find(c => c.options && c.options.label && c.options.label.includes('Template Loader'));
+    const confirmationBoxComponent = components.find(c => c.options && c.options.label === ' Confirm ');
+
+    // Only activate if no other input box is currently active
+    if ((searchBoxComponent && searchBoxComponent.hidden) &&
+        (templateNameBoxComponent && templateNameBoxComponent.hidden) &&
+        (promptTemplateNameBoxComponent && promptTemplateNameBoxComponent.hidden) &&
+        (templateLoaderBoxComponent && templateLoaderBoxComponent.hidden) &&
+        (confirmationBoxComponent && confirmationBoxComponent.hidden)) {
+      promptHandler.showPromptInput(promptBox, screen);
+    }
+  });
+}
+
+/**
+ * Setup prompt box handlers
+ * @param {Object} promptBox - Prompt box component
+ * @param {Object} promptTemplateNameBox - Prompt template name box component
+ * @param {Object} treeBox - Tree box component
+ * @param {Object} infoBox - Info box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupPromptBoxHandlers(promptBox, promptTemplateNameBox, screen) {
+  const state = stateManager.getState();
+
+  // Handle escape to close prompt box (now handled in setupEscapeHandler)
+
+  // Handle Shift+Enter for newlines
+  promptBox.key('S-enter', () => {
+    // Insert a newline character at the current cursor position
+    const currentValue = promptBox.getValue();
+    const cursorPos = promptBox.cursor;
+    const newValue = currentValue.substring(0, cursorPos) + '\n' + currentValue.substring(cursorPos);
+    promptBox.setValue(newValue);
+    // Move cursor position after the newline
+    promptBox.cursor = cursorPos + 1;
+    screen.render();
+  });
+
+  // Make Enter just insert a newline as well
+  promptBox.key('enter', () => {
+    // Insert a newline character at the current cursor position
+    const currentValue = promptBox.getValue();
+    const cursorPos = promptBox.cursor;
+    const newValue = currentValue.substring(0, cursorPos) + '\n' + currentValue.substring(cursorPos);
+    promptBox.setValue(newValue);
+    // Move cursor position after the newline
+    promptBox.cursor = cursorPos + 1;
+    screen.render();
+  });
+
+  // Handle Ctrl+S for saving prompt template
+  promptBox.key('C-s', () => {
+    // Hide promptBox temporarily, show promptTemplateNameBox
+    state.currentPrompt = promptBox.getValue(); // Save content to state
+    promptBox.hide();
+    promptTemplateNameBox.clearValue();
+    promptTemplateNameBox.hidden = false;
+    promptTemplateNameBox.show();
+    promptTemplateNameBox.focus();
+    screen.render();
+  });
+}
+
+/**
+ * Setup prompt template name box handlers
+ * @param {Object} promptTemplateNameBox - Prompt template name box component
+ * @param {Object} promptBox - Prompt box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupPromptTemplateNameBoxHandlers(promptTemplateNameBox, promptBox, statusBox, screen) {
+  const state = stateManager.getState();
+
+  // Handle escape and ctrl+c to cancel template name input (now handled in setupEscapeHandler)
+
+  // Handle enter to save prompt template
+  promptTemplateNameBox.key('enter', async () => {
+    const templateName = promptTemplateNameBox.getValue();
+    promptTemplateNameBox.hide();
+    promptTemplateNameBox.hidden = true;
+
+    if (templateName) {
+      const promptContent = state.currentPrompt;
+      try {
+        promptHandler.savePromptTemplateInfo(templateName, promptContent, statusBox);
+        statusBox.setContent(`Prompt template "${templateName}" will be saved when you exit.`);
+      } catch(err) {
+        statusBox.setContent(`{red-fg}Error saving prompt template: ${err.message}{/red-fg}`);
+      }
+    }
+
+    // Return focus to promptBox
+    promptBox.show();
+    promptBox.focus();
+    screen.render();
+
+    // Clear message after timeout
+    const components = screen.children;
+    const templateLoaderBoxComponent = components.find(c => c.options && c.options.label && c.options.label.includes('Template Loader'));
+
+    setTimeout(() => {
+      statusView.updateStatus(statusBox, state.isSearchActive, false, templateLoaderBoxComponent);
+      screen.render();
+    }, 2000);
+  });
+}
+
+/**
+ * Setup template loader handlers
+ * @param {Object} templateLoaderBox - Template loader box component
+ * @param {Object} fileTemplateList - File template list component
+ * @param {Object} promptTemplateList - Prompt template list component
+ * @param {Object} treeBox - Tree box component
+ * @param {Object} infoBox - Info box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} confirmationBox - Confirmation box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupTemplateLoaderHandlers(templateLoaderBox, fileTemplateList, promptTemplateList, treeBox, infoBox, statusBox, confirmationBox, screen) {
+  const state = stateManager.getState();
+
+  // Handle Tab to switch focus between file and prompt templates
+  templateLoaderBox.key('tab', () => {
+    // Handle tab key in the template loader box
+    if (templateLoaderBox.hidden) return;
+
+    // Stop event propagation to prevent the global tab handler from handling it
+    screen.lockKeys = true;
+
+    if (state.templateLoaderFocus === 'files') {
+      state.templateLoaderFocus = 'prompts';
+      promptTemplateList.focus();
+      promptTemplateList.style.border = { fg: 'green' };
+      fileTemplateList.style.border = { fg: 'white' };
+    } else {
+      state.templateLoaderFocus = 'files';
+      fileTemplateList.focus();
+      fileTemplateList.style.border = { fg: 'green' };
+      promptTemplateList.style.border = { fg: 'white' };
+    }
+
+    screen.render();
+
+    // Unlock keys after handling
+    screen.lockKeys = false;
+
+    // Return true to indicate we've handled the event
+    return true;
+  });
+
+  // Add tab key handlers to the file and prompt template lists
+  fileTemplateList.key('tab', () => {
+    if (templateLoaderBox.hidden) return;
+
+    // Switch to prompt templates
+    state.templateLoaderFocus = 'prompts';
+    promptTemplateList.focus();
+    promptTemplateList.style.border = { fg: 'green' };
+    fileTemplateList.style.border = { fg: 'white' };
+
+    screen.render();
+    return true;
+  });
+
+  promptTemplateList.key('tab', () => {
+    if (templateLoaderBox.hidden) return;
+
+    // Switch to file templates
+    state.templateLoaderFocus = 'files';
+    fileTemplateList.focus();
+    fileTemplateList.style.border = { fg: 'green' };
+    promptTemplateList.style.border = { fg: 'white' };
+
+    screen.render();
+    return true;
+  });
+
+  // Handle Enter to load selected template
+  templateLoaderBox.key('enter', async () => {
+    if (templateLoaderBox.hidden) return;
+
+    let selectedItem;
+    let templateName;
+    let success = false;
+    let itemType = '';
+
+    if (state.templateLoaderFocus === 'files') {
+      selectedItem = fileTemplateList.getItem(fileTemplateList.selected);
+      if (!selectedItem || selectedItem.content === 'No file templates') return;
+
+      templateName = selectedItem.content;
+      itemType = 'File';
+      success = await templateHandler.loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox);
+    } else {
+      selectedItem = promptTemplateList.getItem(promptTemplateList.selected);
+      if (!selectedItem || selectedItem.content === 'No prompt templates') return;
+
+      templateName = selectedItem.content;
+      itemType = 'Prompt';
+      success = await promptHandler.loadPromptTemplate(templateName, promptBox, statusBox);
+    }
+
+    templateLoaderBox.hide();
+    templateLoaderBox.hidden = true;
+    treeBox.focus();
+
+    if (success) {
+      statusBox.setContent(`${itemType} template "${templateName}" loaded.`);
+    } else {
+      statusBox.setContent(`{red-fg}Failed to load ${itemType} template "${templateName}".{/red-fg}`);
+    }
+
+    screen.render();
+
+    setTimeout(() => {
+      statusView.updateStatus(statusBox, state.isSearchActive, false);
+      screen.render();
+    }, 2000);
+  });
+
+  // Handle 'd' to delete selected template
+  templateLoaderBox.key('d', async () => {
+    if (templateLoaderBox.hidden) return;
+
+    let listComponent;
+    let templateManagerRef;
+    let itemType = '';
+
+    if (state.templateLoaderFocus === 'files') {
+      listComponent = fileTemplateList;
+      templateManagerRef = require('../../templates/manager');
+      itemType = 'File';
+    } else {
+      listComponent = promptTemplateList;
+      templateManagerRef = require('../../prompts/manager');
+      itemType = 'Prompt';
+    }
+
+    const selectedItem = listComponent.getItem(listComponent.selected);
+    if (!selectedItem || selectedItem.content.startsWith('No ')) return;
+
+    const templateName = selectedItem.content;
+
+    // Show confirmation dialog
+    statusView.showConfirmationDialog(confirmationBox, `Delete ${itemType} template "${templateName}"? (y/n)`, async (confirmed) => {
+      if (confirmed) {
+        let deleteSuccess = false;
+        if (itemType === 'File') {
+          deleteSuccess = await templateManagerRef.deleteTemplate(templateName);
+        } else {
+          deleteSuccess = await templateManagerRef.deletePromptTemplate(templateName);
+        }
+
+        // Refresh the correct list
+        const templates = itemType === 'File' ?
+          await templateManagerRef.listTemplates() :
+          await templateManagerRef.listPromptTemplates();
+
+        listComponent.setItems(templates.length > 0 ? templates : [`No ${itemType.toLowerCase()} templates`]);
+
+        statusBox.setContent(deleteSuccess ?
+          `${itemType} template "${templateName}" deleted.` :
+          `{red-fg}Failed to delete ${itemType} template "${templateName}".{/red-fg}`);
+      }
+
+      // Return focus to the loader box
+      listComponent.focus();
+      screen.render();
+
+      setTimeout(() => {
+        statusView.updateStatus(statusBox, state.isSearchActive, false);
+        screen.render();
+      }, 2000);
+    });
+
+    screen.render();
   });
 }
 

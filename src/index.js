@@ -50,13 +50,15 @@ async function run(options) {
           formattedContent = await graphXmlFormatter.formatGraphForLLM(
             result.selectedFiles,
             result.directoryTree,
-            codeGraph
+            codeGraph,
+            result.currentPrompt
           );
         } else {
           formattedContent = await graphFormatter.formatGraphForLLM(
             result.selectedFiles,
             result.directoryTree,
-            codeGraph
+            codeGraph,
+            result.currentPrompt
           );
         }
 
@@ -75,7 +77,8 @@ async function run(options) {
             {
               // Include file contents if specified in options or from terminal UI
               includeFileContents: result.includeContents
-            }
+            },
+            result.currentPrompt
           );
         } else {
           formattedContent = await codeMapsFormatter.formatCodeMapsForLLM(
@@ -85,7 +88,8 @@ async function run(options) {
             {
               // Include file contents if specified in options or from terminal UI
               includeFileContents: result.includeContents
-            }
+            },
+            result.currentPrompt
           );
         }
 
@@ -95,12 +99,14 @@ async function run(options) {
         if (result.outputFormat === outputHandler.OUTPUT_FORMATS.XML) {
           formattedContent = await xmlFormatter.formatForLLM(
             result.selectedFiles,
-            result.directoryTree
+            result.directoryTree,
+            result.currentPrompt
           );
         } else {
           formattedContent = await formatter.formatForLLM(
             result.selectedFiles,
-            result.directoryTree
+            result.directoryTree,
+            result.currentPrompt
           );
         }
       }
@@ -119,6 +125,17 @@ async function run(options) {
         const filesToSave = result.templateFiles || result.selectedFiles;
         await templateManager.saveTemplate(result.saveTemplate, filesToSave);
         console.log(`Saved selection as template: ${result.saveTemplate}`);
+      }
+
+      // Save prompt template if requested
+      if (result.promptTemplateToSave && result.currentPrompt) {
+        const promptManager = require('./prompts/manager');
+        try {
+          await promptManager.savePromptTemplate(result.promptTemplateToSave, result.currentPrompt);
+          console.log(`Saved prompt as template: ${result.promptTemplateToSave}`);
+        } catch (err) {
+          console.error(`Failed to save prompt template "${result.promptTemplateToSave}":`, err.message);
+        }
       }
     } else {
       console.log('No files selected.');

@@ -13,35 +13,40 @@ const state = {
   selectedEmptyDirs: [],
   directoryTree: null,
   tokenCount: 0,
-  
+
   // UI state
   expandedDirs: new Set(),
   activeBox: 'treeBox',
-  
+
   // Search state
   isSearchActive: false,
   searchResults: [],
   originalTree: null,
   groupedResults: {},
   searchListToNodeMap: [], // Map display indices to actual nodes in search mode
-  
+
   // Template state
   templateToSave: null,
   templateFiles: [],
-  
+
+  // Prompt state
+  currentPrompt: '',
+  promptTemplateToSave: null,
+  templateLoaderFocus: 'files', // 'files' or 'prompts'
+
   // Multi-selection state
   multiSelectStartIndex: -1,
   highlightedIndices: new Set(),
-  
+
   // Mode state
   currentMode: modeHandler.MODES.STANDARD,
-  
+
   // CodeMaps options
   includeContents: false,
-  
+
   // Output format
   currentOutputFormat: outputHandler.OUTPUT_FORMATS.MARKDOWN,
-  
+
   // Flattened tree for node lookup
   flattenedTree: []
 };
@@ -87,6 +92,9 @@ function resetState() {
   state.searchListToNodeMap = [];
   state.templateToSave = null;
   state.templateFiles = [];
+  state.currentPrompt = '';
+  state.promptTemplateToSave = null;
+  state.templateLoaderFocus = 'files';
   state.multiSelectStartIndex = -1;
   state.highlightedIndices = new Set();
   state.flattenedTree = [];
@@ -112,6 +120,8 @@ function getResult() {
     tokenCount: state.tokenCount,
     saveTemplate: state.templateToSave,
     templateFiles: state.templateFiles.length > 0 ? state.templateFiles : null,
+    currentPrompt: state.currentPrompt,
+    promptTemplateToSave: state.promptTemplateToSave,
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat
@@ -130,6 +140,8 @@ function getEmptyResult() {
     tokenCount: 0,
     saveTemplate: null,
     templateFiles: null,
+    currentPrompt: '',
+    promptTemplateToSave: null,
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat

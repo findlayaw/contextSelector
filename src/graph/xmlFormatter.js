@@ -6,9 +6,10 @@ const fileSystem = require('../simpleFileSystem');
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
  * @param {Object} codeGraph - Code graph object
+ * @param {string} currentPrompt - Current prompt text
  * @returns {string} - Formatted content for clipboard in XML format
  */
-async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
+async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, currentPrompt) {
   let result = '';
 
   // Add XML header
@@ -24,7 +25,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Add code graph
   result += '  <code_graph>\n';
-  
+
   // Add nodes
   result += '    <nodes>\n';
   for (const node of codeGraph.nodes) {
@@ -32,23 +33,23 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
     result += `        <id>${escapeXml(node.id)}</id>\n`;
     result += `        <type>${escapeXml(node.type)}</type>\n`;
     result += `        <label>${escapeXml(node.label || '')}</label>\n`;
-    
+
     // Add path if available
     if (node.path) {
       result += `        <path>${escapeXml(node.path)}</path>\n`;
     }
-    
+
     // Add other properties
     for (const [key, value] of Object.entries(node)) {
       if (key !== 'id' && key !== 'type' && key !== 'label' && key !== 'path' && key !== 'node' && value !== undefined) {
         result += `        <${key}>${formatXmlValue(value)}</${key}>\n`;
       }
     }
-    
+
     result += '      </node>\n';
   }
   result += '    </nodes>\n\n';
-  
+
   // Add edges
   result += '    <edges>\n';
   for (const edge of codeGraph.edges) {
@@ -56,14 +57,14 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
     result += `        <source>${escapeXml(edge.source)}</source>\n`;
     result += `        <target>${escapeXml(edge.target)}</target>\n`;
     result += `        <type>${escapeXml(edge.type)}</type>\n`;
-    
+
     // Add other properties
     for (const [key, value] of Object.entries(edge)) {
       if (key !== 'source' && key !== 'target' && key !== 'type' && key !== 'id' && value !== undefined) {
         result += `        <${key}>${formatXmlValue(value)}</${key}>\n`;
       }
     }
-    
+
     result += '      </edge>\n';
   }
   result += '    </edges>\n';
@@ -71,20 +72,20 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Add function calls section
   result += '  <function_calls>\n';
-  
+
   // Group functions by their calls
   const functionCalls = new Map();
-  
+
   for (const edge of codeGraph.edges) {
     if (edge.type === 'calls') {
       const sourceNode = codeGraph.nodes.find(node => node.id === edge.source);
       const targetNode = codeGraph.nodes.find(node => node.id === edge.target);
-      
+
       if (sourceNode && targetNode) {
         if (!functionCalls.has(sourceNode.id)) {
           functionCalls.set(sourceNode.id, []);
         }
-        
+
         functionCalls.get(sourceNode.id).push({
           id: targetNode.id,
           name: targetNode.label,
@@ -96,7 +97,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       }
     }
   }
-  
+
   // Output function calls
   for (const [sourceId, calls] of functionCalls.entries()) {
     const sourceNode = codeGraph.nodes.find(node => node.id === sourceId);
@@ -105,7 +106,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       result += `      <name>${escapeXml(sourceNode.label)}</name>\n`;
       result += `      <path>${escapeXml(sourceNode.path)}</path>\n`;
       result += '      <calls>\n';
-      
+
       if (calls.length === 0) {
         result += '        <none/>\n';
       } else {
@@ -113,24 +114,24 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
           result += '        <call>\n';
           result += `          <name>${escapeXml(call.name)}</name>\n`;
           result += `          <path>${escapeXml(path.basename(call.path))}</path>\n`;
-          
+
           if (call.args) {
             result += `          <args>${escapeXml(call.args)}</args>\n`;
           }
-          
+
           if (call.line) {
             result += `          <line>${call.line}</line>\n`;
           }
-          
+
           result += '        </call>\n';
         }
       }
-      
+
       result += '      </calls>\n';
       result += '    </function>\n';
     }
   }
-  
+
   result += '  </function_calls>\n\n';
 
   // Add files
@@ -151,6 +152,20 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
   }
 
   result += '  </files>\n';
+
+  // Add prompt if it exists
+  if (currentPrompt && currentPrompt.trim().length > 0) {
+    result += '  <user_instructions><![CDATA[\n';
+    result += currentPrompt;
+
+    // Ensure trailing newline if prompt doesn't end with one
+    if (!currentPrompt.endsWith('\n')) {
+      result += '\n';
+    }
+
+    result += '  ]]></user_instructions>\n';
+  }
+
   result += '</context>';
 
   return result;

@@ -144,24 +144,126 @@ function createComponents() {
     content: ''
   });
 
-  // Create the template selection box
-  const templateSelectBox = blessed.list({
-    bottom: 3,
-    left: 'center',
-    width: '80%',
-    height: '50%',
+  // Create the prompt input box
+  const promptBox = blessed.textarea({
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: 5,
     border: {
       type: 'line'
     },
-    label: ' Select Template ',
+    label: ' Prompt (Shift+Enter for new line, Esc to close, Ctrl+S to Save Template) ',
     hidden: true,
     keys: true,
-    vi: true,
+    mouse: true,
+    inputOnFocus: true,
     tags: true,
+    scrollable: true,
+    scrollbar: {
+      ch: ' ',
+      track: {
+        bg: 'cyan'
+      },
+      style: {
+        inverse: true
+      }
+    }
+  });
+
+  // Create the prompt template name input box
+  const promptTemplateNameBox = blessed.textbox({
+    bottom: 3,
+    left: 'center',
+    width: '80%',
+    height: 3,
+    border: {
+      type: 'line'
+    },
+    label: ' Save Prompt Template As ',
+    hidden: true,
+    keys: true,
+    inputOnFocus: true,
+    tags: true
+  });
+
+  // Create the template loader box (container for both file and prompt templates)
+  const templateLoaderBox = blessed.box({
+    bottom: 3,
+    left: 'center',
+    width: '90%',
+    height: '60%',
+    border: {
+      type: 'line'
+    },
+    label: ' Template Loader (Tab to switch lists, Enter to load, d to delete, Esc to close) ',
+    hidden: true,
+    tags: true
+  });
+
+  // Create the file template list (left side)
+  const fileTemplateList = blessed.list({
+    parent: templateLoaderBox,
+    top: 1,
+    left: 1,
+    width: '50%-2',
+    height: '100%-2',
+    label: ' File Templates ',
+    border: {
+      type: 'line'
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    tags: true,
+    scrollable: true,
+    scrollbar: {
+      ch: ' ',
+      style: {
+        inverse: true
+      }
+    },
     items: [],
     style: {
       selected: {
         bg: 'blue',
+        fg: 'white'
+      },
+      border: {
+        fg: 'white'
+      }
+    }
+  });
+
+  // Create the prompt template list (right side)
+  const promptTemplateList = blessed.list({
+    parent: templateLoaderBox,
+    top: 1,
+    right: 1,
+    width: '50%-2',
+    height: '100%-2',
+    label: ' Prompt Templates ',
+    border: {
+      type: 'line'
+    },
+    keys: true,
+    vi: true,
+    mouse: true,
+    tags: true,
+    scrollable: true,
+    scrollbar: {
+      ch: ' ',
+      style: {
+        inverse: true
+      }
+    },
+    items: [],
+    style: {
+      selected: {
+        bg: 'blue',
+        fg: 'white'
+      },
+      border: {
         fg: 'white'
       }
     }
@@ -171,9 +273,11 @@ function createComponents() {
   screen.append(treeBox);
   screen.append(infoBox);
   screen.append(statusBox);
+  screen.append(promptBox);
   screen.append(searchBox);
   screen.append(templateNameBox);
-  screen.append(templateSelectBox);
+  screen.append(promptTemplateNameBox);
+  screen.append(templateLoaderBox);
   screen.append(confirmationBox);
 
   return {
@@ -184,7 +288,11 @@ function createComponents() {
     searchBox,
     templateNameBox,
     confirmationBox,
-    templateSelectBox
+    promptBox,
+    promptTemplateNameBox,
+    templateLoaderBox,
+    fileTemplateList,
+    promptTemplateList
   };
 }
 
@@ -196,7 +304,7 @@ function createComponents() {
 function initializeUI(resolvePromise) {
   const components = createComponents();
   const { screen } = components;
-  
+
   // Set focus to the tree box and update border styles
   const state = stateManager.getState();
   state.activeBox = 'treeBox';

@@ -11,9 +11,10 @@ const fileSystem = require('../simpleFileSystem');
  * @param {Object} codeMaps - Code maps object
  * @param {Object} options - Formatting options
  * @param {boolean} options.includeFileContents - Whether to include full file contents (default: false)
+ * @param {string} currentPrompt - Current prompt text
  * @returns {string} - Formatted content for clipboard
  */
-async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, options = {}) {
+async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, options = {}, currentPrompt) {
   // Set default options
   const includeFileContents = options.includeFileContents !== undefined ? options.includeFileContents : false;
   let result = '';
@@ -291,6 +292,18 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
     }
 
     result += '\n---\n\n';
+  }
+
+  // Add prompt if it exists
+  if (currentPrompt && currentPrompt.trim().length > 0) {
+    result += '---\n\n';
+    result += '## IMPORTANT: User Instructions\n\n';
+    result += currentPrompt;
+
+    // Ensure trailing newline if prompt doesn't end with one
+    if (!currentPrompt.endsWith('\n')) {
+      result += '\n';
+    }
   }
 
   return result;

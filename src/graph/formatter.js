@@ -11,9 +11,10 @@ const tokenCounter = require('../utils/tokenCounter');
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
  * @param {Object} codeGraph - Code graph object
+ * @param {string} currentPrompt - Current prompt text
  * @returns {string} - Formatted content for clipboard
  */
-async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
+async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, currentPrompt) {
   let result = '';
 
   // Add directory tree
@@ -110,16 +111,16 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Get all class nodes
   const classNodes = codeGraph.nodes.filter(node => node.type === 'class');
-  
+
   // Group classes by inheritance
   const classHierarchy = new Map();
   const rootClasses = [];
-  
+
   for (const classNode of classNodes) {
-    const extendsEdges = codeGraph.edges.filter(edge => 
+    const extendsEdges = codeGraph.edges.filter(edge =>
       edge.source === classNode.id && edge.type === 'extends'
     );
-    
+
     if (extendsEdges.length > 0) {
       for (const edge of extendsEdges) {
         if (!classHierarchy.has(edge.target)) {
@@ -131,34 +132,34 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       rootClasses.push(classNode);
     }
   }
-  
+
   // Format class hierarchy
   function formatClassHierarchy(classNode, level = 0) {
     let hierarchyText = '';
     const indent = '  '.repeat(level);
-    
+
     hierarchyText += `${indent}- ${classNode.label} (${classNode.path})`;
-    
+
     // Add methods and properties if available
     if (classNode.methods && classNode.methods.length > 0) {
       hierarchyText += ` [Methods: ${classNode.methods.join(', ')}]`;
     }
-    
+
     if (classNode.properties && classNode.properties.length > 0) {
       hierarchyText += ` [Properties: ${classNode.properties.join(', ')}]`;
     }
-    
+
     hierarchyText += '\n';
-    
+
     // Add child classes
     const children = classHierarchy.get(classNode.id) || [];
     for (const child of children) {
       hierarchyText += formatClassHierarchy(child, level + 1);
     }
-    
+
     return hierarchyText;
   }
-  
+
   if (rootClasses.length > 0) {
     for (const rootClass of rootClasses) {
       result += formatClassHierarchy(rootClass);
@@ -166,7 +167,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
   } else {
     result += 'No class hierarchy detected.\n';
   }
-  
+
   result += '\n';
 
   // Add horizontal rule as separator
@@ -205,16 +206,16 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
     const funcNode = codeGraph.nodes.find(node => node.id === funcId);
     if (funcNode) {
       result += `## ${funcNode.label} (${funcNode.path})\n\n`;
-      
+
       // Add function type and parameters if available
       if (funcNode.functionType) {
         result += `Type: ${funcNode.functionType}\n`;
       }
-      
+
       if (funcNode.params && funcNode.params.length > 0) {
         result += `Parameters: ${funcNode.params.join(', ')}\n`;
       }
-      
+
       result += 'Calls:\n';
 
       if (calls.length === 0) {
@@ -222,15 +223,15 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       } else {
         for (const call of calls) {
           let callText = `- ${call.name} (${path.basename(call.path)})`;
-          
+
           if (call.args) {
             callText += ` with args: ${call.args}`;
           }
-          
+
           if (call.line) {
             callText += ` at line ${call.line}`;
           }
-          
+
           result += callText + '\n';
         }
       }
@@ -244,29 +245,29 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
 
   // Add variable usage section
   result += '# Important Variables\n\n';
-  
+
   // Get all variable nodes
   const variableNodes = codeGraph.nodes.filter(node => node.type === 'variable');
-  
+
   if (variableNodes.length > 0) {
     for (const varNode of variableNodes) {
       result += `## ${varNode.label} (${varNode.path})\n\n`;
-      
+
       result += `Type: ${varNode.kind} ${varNode.valueType || ''}\n`;
-      
+
       // Find references to this variable
-      const references = codeGraph.edges.filter(edge => 
-        (edge.source === varNode.id || edge.target === varNode.id) && 
+      const references = codeGraph.edges.filter(edge =>
+        (edge.source === varNode.id || edge.target === varNode.id) &&
         edge.type !== 'defined_in'
       );
-      
+
       if (references.length > 0) {
         result += 'Referenced by:\n';
-        
+
         for (const ref of references) {
           const otherNodeId = ref.source === varNode.id ? ref.target : ref.source;
           const otherNode = codeGraph.nodes.find(node => node.id === otherNodeId);
-          
+
           if (otherNode) {
             result += `- ${otherNode.label} (${otherNode.type}) in ${path.basename(otherNode.path)}\n`;
           }
@@ -274,7 +275,7 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
       } else {
         result += 'No references found.\n';
       }
-      
+
       result += '\n';
     }
   } else {
@@ -319,11 +320,11 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph) {
  */
 function formatCypherQuery(codeGraph) {
   let query = '';
-  
+
   // Create nodes
   for (const node of codeGraph.nodes) {
     query += `CREATE (n${node.id.replace(/[^a-zA-Z0-9]/g, '_')}:${node.type} {`;
-    
+
     // Add properties
     const props = [];
     for (const [key, value] of Object.entries(node)) {
@@ -339,18 +340,18 @@ function formatCypherQuery(codeGraph) {
         }
       }
     }
-    
+
     query += props.join(', ');
     query += '})\n';
   }
-  
+
   // Create relationships
   for (const edge of codeGraph.edges) {
     const sourceId = edge.source.replace(/[^a-zA-Z0-9]/g, '_');
     const targetId = edge.target.replace(/[^a-zA-Z0-9]/g, '_');
-    
+
     query += `CREATE (n${sourceId})-[:${edge.type} {`;
-    
+
     // Add properties
     const props = [];
     for (const [key, value] of Object.entries(edge)) {
@@ -364,11 +365,11 @@ function formatCypherQuery(codeGraph) {
         }
       }
     }
-    
+
     query += props.join(', ');
     query += `}]->(n${targetId})\n`;
   }
-  
+
   return query;
 }
 
@@ -427,6 +428,18 @@ function formatSExpression(codeGraph) {
   result += '  )\n';
 
   result += ')\n';
+
+  // Add prompt if it exists
+  if (currentPrompt && currentPrompt.trim().length > 0) {
+    result += '---\n\n';
+    result += '## IMPORTANT: User Instructions\n\n';
+    result += currentPrompt;
+
+    // Ensure trailing newline if prompt doesn't end with one
+    if (!currentPrompt.endsWith('\n')) {
+      result += '\n';
+    }
+  }
 
   return result;
 }

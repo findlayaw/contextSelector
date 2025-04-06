@@ -34,12 +34,12 @@ async function showTemplateSelection(box) {
  * @param {Object} infoBox - Blessed box for selected files
  * @param {Object} treeBox - Blessed box for file tree
  * @param {Object} statusBox - Blessed box for status
- * @param {Object} templateSelectBox - Blessed box for template selection
+ * @param {Object} templateLoaderBox - Blessed box for template loader
  * @returns {Promise<boolean>} - True if template was loaded successfully
  */
-async function loadTemplate(templateName, infoBox, treeBox, statusBox, templateSelectBox) {
+async function loadTemplate(templateName, infoBox, treeBox, statusBox, templateLoaderBox) {
   const state = stateManager.getState();
-  
+
   const template = await templateManager.loadTemplate(templateName);
   if (template && template.files) {
     // Check if each file/directory in the template exists
@@ -79,13 +79,13 @@ async function loadTemplate(templateName, infoBox, treeBox, statusBox, templateS
 
     selectionView.updateSelectedFiles(infoBox);
     selectionView.updateTokenCount();
-    statusView.updateStatus(statusBox, false, false, templateSelectBox);
+    statusView.updateStatus(statusBox, false, false, templateLoaderBox);
     // Render the tree to show visual indicators for selected files
     treeView.renderTree(treeBox, state.directoryTree);
-    
+
     return true;
   }
-  
+
   return false;
 }
 
@@ -94,11 +94,11 @@ async function loadTemplate(templateName, infoBox, treeBox, statusBox, templateS
  * @param {string} templateName - Name of the template to save
  * @param {Object} statusBox - Blessed box for status
  * @param {boolean} isSearchActive - Whether search is active
- * @param {Object} templateSelectBox - Blessed box for template selection
+ * @param {Object} templateLoaderBox - Blessed box for template loader
  */
-function saveTemplateInfo(templateName, statusBox, isSearchActive, templateSelectBox) {
+function saveTemplateInfo(templateName, statusBox, isSearchActive, templateLoaderBox) {
   const state = stateManager.getState();
-  
+
   if (templateName) {
     // Save the template name and take a snapshot of currently selected files and empty directories
     state.templateToSave = templateName;
@@ -109,8 +109,8 @@ function saveTemplateInfo(templateName, statusBox, isSearchActive, templateSelec
     state.templateFiles = state.templateFiles.concat(emptyDirsCopy);
 
     // Show a notification that the template will be saved
-    statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` + 
-      statusView.updateStatus(statusBox, isSearchActive, true, templateSelectBox));
+    statusBox.setContent(`Template "${templateName}" will be saved when you exit. Continue selecting files...\n\n` +
+      statusView.updateStatus(statusBox, isSearchActive, true, templateLoaderBox));
   }
 }
 
