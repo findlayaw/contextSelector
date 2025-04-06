@@ -11,6 +11,7 @@ program
   .option('-t, --template <name>', 'Load a saved selection template')
   .option('-s, --search <query>', 'Start with a search query')
   .option('-d, --directory <path>', 'Specify the starting directory', process.cwd())
+  .option('-g, --graph', 'Enable graph mode to analyze code relationships')
   .action(async (options) => {
     try {
       await app.run(options);

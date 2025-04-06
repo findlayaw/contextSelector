@@ -11,6 +11,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 - Real-time token counting
 - Search for files and folders
 - Save and load selection templates
+- Graph mode for analyzing code relationships
 
 ## Installation
 
@@ -42,6 +43,9 @@ aw --search "filename"
 
 # Load a saved template
 aw --template "my-template"
+
+# Enable graph mode for code relationship analysis
+aw --graph
 ```
 
 ## Keyboard Controls
@@ -72,7 +76,11 @@ aw --template "my-template"
 
 ## Output Format
 
-The tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension:
+The tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension.
+
+### Standard Mode
+
+In standard mode, the output includes the directory structure and file contents:
 
 ````markdown
 # Project Directory Structure
@@ -107,6 +115,66 @@ console.log('Hello, world!');
   "version": "1.0.0"
 }
 ```
+
+---
+````
+
+### Graph Mode
+
+In graph mode (enabled with `--graph`), the output includes code relationship information in addition to file contents:
+
+````markdown
+# Project Directory Structure
+
+```
+project/
+  src/
+    index.js
+    utils/
+      helper.js
+  package.json
+```
+
+---
+
+# Code Graph Overview
+
+Total Files: 3
+Total Nodes: 8
+Total Relationships: 5
+
+## Node Types
+- file: 3
+- function: 4
+- class: 1
+
+## Relationship Types
+- imports: 2
+- defined_in: 3
+
+---
+
+# File Dependencies
+
+## src/index.js
+
+Dependencies:
+- helper.js (src/utils/helper.js)
+
+---
+
+# Function Calls
+
+## main (src/index.js)
+
+Calls:
+- formatOutput (src/utils/helper.js)
+
+---
+
+# Selected Files
+
+[File contents as in standard mode...]
 
 ---
 ````

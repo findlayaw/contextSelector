@@ -5,6 +5,7 @@ const fileSystem = require('../simpleFileSystem');
 const search = require('../utils/search');
 const tokenCounter = require('../utils/tokenCounter');
 const templateManager = require('../templates/manager');
+const graphAnalyzer = require('../graph/analyzer');
 
 // Store the currently selected files
 let selectedFiles = [];
@@ -33,12 +34,18 @@ let highlightedIndices = new Set();
 // Track which box has focus (treeBox or infoBox)
 let activeBox = 'treeBox';
 
+// Graph mode state
+let isGraphModeEnabled = false;
+
 /**
  * Start the terminal UI
  * @param {Object} options - UI options
  * @returns {Promise<Object>} - Result with selected files and other data
  */
 async function start(options) {
+  // Set graph mode state
+  isGraphModeEnabled = options.graphMode || false;
+
   return new Promise(async (resolve, reject) => {
     try {
       // Create a screen object
@@ -1519,8 +1526,13 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
     escapeAction = 'Close template selection';
   }
 
+  // Add graph mode indicator if enabled
+  const graphModeIndicator = isGraphModeEnabled ? ' | {bold}Mode:{/bold} Graph Analysis' : '';
+
   const content = [
-    `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` + (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : ''),
+    `{bold}Selected:{/bold} ${selectedFiles.length} files | {bold}Tokens:{/bold} ${tokenCount}` +
+    (templateToSave ? ` | {bold}Template to save:{/bold} ${templateToSave}` : '') +
+    graphModeIndicator,
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}h:{/bold} Parent directory   {bold}l:{/bold} Enter directory',
     '  {bold}Vim-like:{/bold}       {bold}g:{/bold} Jump to top     {bold}G:{/bold} Jump to bottom     {bold}a:{/bold} Toggle all visible',
