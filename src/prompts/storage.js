@@ -29,7 +29,7 @@ async function init() {
 async function savePrompt(name, content) {
   try {
     await init();
-    
+
     const promptPath = path.join(PROMPTS_DIR, `${name}.json`);
     await fs.writeJson(promptPath, { name, content }, { spaces: 2 });
   } catch (error) {
@@ -46,13 +46,13 @@ async function savePrompt(name, content) {
 async function loadPrompt(name) {
   try {
     await init();
-    
+
     const promptPath = path.join(PROMPTS_DIR, `${name}.json`);
-    
+
     if (await fs.pathExists(promptPath)) {
       return await fs.readJson(promptPath);
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error loading prompt:', error.message);
@@ -67,9 +67,9 @@ async function loadPrompt(name) {
 async function listPrompts() {
   try {
     await init();
-    
+
     const files = await fs.readdir(PROMPTS_DIR);
-    
+
     return files
       .filter(file => file.endsWith('.json'))
       .map(file => path.basename(file, '.json'));
@@ -87,14 +87,14 @@ async function listPrompts() {
 async function deletePrompt(name) {
   try {
     await init();
-    
+
     const promptPath = path.join(PROMPTS_DIR, `${name}.json`);
-    
+
     if (await fs.pathExists(promptPath)) {
       await fs.remove(promptPath);
       return true;
     }
-    
+
     return false;
   } catch (error) {
     console.error('Error deleting prompt:', error.message);

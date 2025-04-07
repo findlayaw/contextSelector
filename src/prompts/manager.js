@@ -12,13 +12,13 @@ async function savePrompt(name, content) {
     if (!name || !content) {
       throw new Error('Prompt name and content cannot be empty.');
     }
-    
+
     // Sanitize name for filename
     const sanitizedName = name.replace(/[^a-zA-Z0-9_-]/g, '_');
     if (!sanitizedName) {
       throw new Error('Invalid prompt name after sanitization.');
     }
-    
+
     await storage.savePrompt(sanitizedName, content);
   } catch (error) {
     console.error('Error saving prompt:', error.message);

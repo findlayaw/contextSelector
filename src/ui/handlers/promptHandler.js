@@ -12,13 +12,13 @@ const statusView = require('../components/statusView');
  */
 async function showPromptSelection(box) {
   const state = stateManager.getState();
-  
+
   // Get available prompts
   state.availablePrompts = await promptManager.listPrompts();
-  
+
   // Create display items with selection indicators
   const displayItems = [];
-  
+
   if (state.availablePrompts.length === 0) {
     displayItems.push('No prompts available. Press "a" to add a new prompt.');
   } else {
@@ -29,7 +29,7 @@ async function showPromptSelection(box) {
       displayItems.push(`${prefix}${name}`);
     });
   }
-  
+
   // Set items and show the box
   box.setItems(displayItems);
   box.hidden = false;
@@ -44,14 +44,14 @@ async function showPromptSelection(box) {
 async function togglePromptSelection(box) {
   const state = stateManager.getState();
   const selectedIndex = box.selected;
-  
+
   // Check if there are any prompts and if the selection is valid
   if (state.availablePrompts.length === 0 || selectedIndex < 0 || selectedIndex >= state.availablePrompts.length) {
     return; // No valid prompt selected
   }
-  
+
   const promptName = state.availablePrompts[selectedIndex];
-  
+
   if (state.selectedPrompts.has(promptName)) {
     // Deselect the prompt
     state.selectedPrompts.delete(promptName);
@@ -62,10 +62,10 @@ async function togglePromptSelection(box) {
       state.selectedPrompts.set(promptName, promptData.content);
     }
   }
-  
+
   // Refresh the display
   await showPromptSelection(box);
-  
+
   // Restore the selection
   box.select(selectedIndex);
 }
@@ -79,18 +79,18 @@ async function togglePromptSelection(box) {
 async function deleteSelectedPrompt(box, confirmationBox, statusBox) {
   const state = stateManager.getState();
   const selectedIndex = box.selected;
-  
+
   // Check if there are any prompts and if the selection is valid
   if (state.availablePrompts.length === 0 || selectedIndex < 0 || selectedIndex >= state.availablePrompts.length) {
     return; // No valid prompt selected
   }
-  
+
   const promptName = state.availablePrompts[selectedIndex];
-  
-  // Show confirmation dialog
+
+  // Show confirmation dialog with a clear, visible message
   statusView.showConfirmationDialog(
     confirmationBox,
-    `Delete prompt "${promptName}"? (Cannot be undone)\n\n[y] Yes  [n] No`,
+    `{bold}Delete prompt "${promptName}"?{/bold} (Cannot be undone)\n\n{inverse}[y]{/inverse} Yes  {inverse}[n]{/inverse} No`,
     async (confirmed) => {
       if (confirmed) {
         const success = await promptManager.deletePrompt(promptName);
@@ -101,19 +101,19 @@ async function deleteSelectedPrompt(box, confirmationBox, statusBox) {
         } else {
           statusBox.setContent(`{red-fg}Error deleting prompt "${promptName}".{/red-fg}`);
         }
-        
+
         // Refresh the list
         await showPromptSelection(box);
       } else {
         statusBox.setContent('Deletion cancelled.');
       }
-      
+
       // Restore status after a delay
       setTimeout(() => {
         statusView.updateStatus(statusBox, state.isSearchActive, false, null);
         box.screen.render();
       }, 2000);
-      
+
       box.focus();
       box.screen.render();
     }
@@ -127,7 +127,7 @@ async function deleteSelectedPrompt(box, confirmationBox, statusBox) {
  */
 function initiateAddPrompt(promptSelectBox, promptAddBox) {
   const state = stateManager.getState();
-  
+
   state.isPromptAddMode = true;
   promptSelectBox.hide();
   promptAddBox.hidden = false;
@@ -148,7 +148,7 @@ async function saveNewPrompt(name, content, statusBox) {
   } catch (error) {
     statusBox.setContent(`{red-fg}Error saving prompt: ${error.message}{/red-fg}`);
   }
-  
+
   // Restore status after a delay
   setTimeout(() => {
     const state = stateManager.getState();

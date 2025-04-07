@@ -131,17 +131,24 @@ function createComponents() {
 
   // Create the confirmation dialog box
   const confirmationBox = blessed.box({
-    bottom: 3,
+    top: 'center',
     left: 'center',
-    width: '50%',
-    height: 7,
+    width: '60%',
+    height: 9,
     border: {
-      type: 'line'
+      type: 'line',
+      fg: 'red'
     },
-    label: ' Confirm ',
+    style: {
+      bg: 'black',
+      fg: 'white',
+      bold: true
+    },
+    label: ' {bold}{red-fg}CONFIRM{/red-fg}{/bold} ',
     hidden: true,
     tags: true,
-    content: ''
+    content: '',
+    align: 'center'
   });
 
   // Create the template selection box

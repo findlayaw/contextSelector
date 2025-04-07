@@ -71,9 +71,12 @@ function showConfirmationDialog(box, message, callback) {
   // Set the content of the confirmation box
   box.setContent(message);
 
-  // Show the box
+  // Show the box and ensure it's visible
   box.hidden = false;
   box.show();
+  box.setFront();
+  box.focus();
+  box.screen.render();
 
   // Handle key events for the confirmation dialog
   const onKey = (_, key) => {
@@ -81,21 +84,26 @@ function showConfirmationDialog(box, message, callback) {
       // User confirmed
       box.hide();
       box.hidden = true;
-      // Remove the key event handler
-      box.screen.unkey(['y', 'n'], onKey);
+      // Remove both key event handlers
+      box.unkey(['y', 'n', 'escape'], onKey);
+      box.screen.unkey(['y', 'n', 'escape'], onKey);
       callback(true);
     } else if (key.name === 'n' || key.name === 'escape') {
       // User cancelled
       box.hide();
       box.hidden = true;
-      // Remove the key event handler
-      box.screen.unkey(['y', 'n'], onKey);
+      // Remove both key event handlers
+      box.unkey(['y', 'n', 'escape'], onKey);
+      box.screen.unkey(['y', 'n', 'escape'], onKey);
       callback(false);
     }
   };
 
-  // Add the key event handler
-  box.screen.key(['y', 'n'], onKey);
+  // Add the key event handler - use direct box key handling for better focus management
+  box.key(['y', 'n', 'escape'], onKey);
+
+  // Also register with screen as a fallback
+  box.screen.key(['y', 'n', 'escape'], onKey);
 }
 
 module.exports = {
