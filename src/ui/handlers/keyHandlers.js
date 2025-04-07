@@ -214,10 +214,10 @@ function setupKeyHandlers(screen, components, resolvePromise) {
   setupOutputFormatHandler(screen, statusBox, templateSelectBox);
 
   // Add key handlers for infoBox
-  setupInfoBoxHandlers(infoBox, treeBox, screen);
+  setupInfoBoxHandlers(infoBox, treeBox, statusBox, templateSelectBox, screen);
 
   // Add escape key handler
-  setupEscapeHandler(screen, templateSelectBox, resolvePromise);
+  setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resolvePromise);
 }
 
 /**
@@ -966,9 +966,11 @@ function setupOutputFormatHandler(screen, statusBox, templateSelectBox) {
  * Setup info box handlers
  * @param {Object} infoBox - Info box component
  * @param {Object} treeBox - Tree box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} templateSelectBox - Template selection box component
  * @param {Object} screen - Blessed screen
  */
-function setupInfoBoxHandlers(infoBox, treeBox, screen) {
+function setupInfoBoxHandlers(infoBox, treeBox, statusBox, templateSelectBox, screen) {
   const state = stateManager.getState();
 
   infoBox.on('focus', () => {
@@ -1027,10 +1029,12 @@ function setupInfoBoxHandlers(infoBox, treeBox, screen) {
 /**
  * Setup escape handler
  * @param {Object} screen - Blessed screen
+ * @param {Object} treeBox - Tree box component
+ * @param {Object} statusBox - Status box component
  * @param {Object} templateSelectBox - Template selection box component
  * @param {Function} resolvePromise - Function to resolve the terminal promise
  */
-function setupEscapeHandler(screen, templateSelectBox, resolvePromise) {
+function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resolvePromise) {
   const state = stateManager.getState();
 
   screen.key('escape', () => {
