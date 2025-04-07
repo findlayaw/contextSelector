@@ -16,13 +16,17 @@ const outputHandler = require('../outputHandler');
  */
 function updateStatus(box, isSearchMode = false, returnContentOnly = false, templateBox = null) {
   const state = stateManager.getState();
-  
+
   // Create a status display with all controls visible and key information in bold
   let escapeAction = 'Quit';
   if (isSearchMode) {
     escapeAction = 'Exit search';
   } else if (templateBox && !templateBox.hidden) {
     escapeAction = 'Close template selection';
+  } else if (state.isPromptSelectMode) {
+    escapeAction = 'Close prompt selection';
+  } else if (state.isPromptAddMode) {
+    escapeAction = 'Cancel adding prompt';
   }
 
   // Add mode indicator
@@ -30,10 +34,14 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
   const outputName = outputHandler.getOutputName(state.currentOutputFormat, state.includeContents, state.currentMode);
   const modeDisplay = ` | {bold}Mode:{/bold} ${modeName} | {bold}Output:{/bold} ${outputName}`;
 
+  // Add prompt status indicator
+  const promptStatus = state.selectedPrompts.size > 0 ? ` | {bold}Prompt:{/bold} Active` : '';
+
   const content = [
     `{bold}Selected:{/bold} ${state.selectedFiles.length} files | {bold}Tokens:{/bold} ${state.tokenCount}` +
     (state.templateToSave ? ` | {bold}Template to save:{/bold} ${state.templateToSave}` : '') +
-    modeDisplay,
+    modeDisplay +
+    promptStatus,
     '{bold}Controls:{/bold}',
     '  {bold}Navigation:{/bold}     {bold}↑/↓:{/bold} Navigate       {bold}h:{/bold} Parent directory   {bold}l:{/bold} Enter directory',
     '  {bold}Vim-like:{/bold}       {bold}g:{/bold} Jump to top     {bold}G:{/bold} Jump to bottom     {bold}a:{/bold} Toggle all visible',
@@ -41,6 +49,7 @@ function updateStatus(box, isSearchMode = false, returnContentOnly = false, temp
     '  {bold}Selection:{/bold}      {bold}Space:{/bold} Toggle select  {bold}S-↑/↓:{/bold} Multi-select',
     '  {bold}Templates:{/bold}      {bold}t:{/bold} Load template   {bold}s:{/bold} Save template      {bold}d:{/bold} Delete template',
     '  {bold}Actions:{/bold}        {bold}/{/bold} Search          {bold}c:{/bold} Copy                {bold}m:{/bold} Change mode       {bold}o:{/bold} Output format',
+    '  {bold}Prompts:        {bold}p:{/bold} Manage prompts',
   '  {bold}Exit:{/bold}           {bold}q:{/bold} Quit',
     `  {bold}Exit/Cancel:{/bold}    {bold}Esc:{/bold} ${escapeAction}`
   ].filter(line => line !== '').join('\n');

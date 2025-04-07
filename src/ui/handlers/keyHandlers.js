@@ -92,6 +92,11 @@ function setupKeyHandlers(screen, components, resolvePromise) {
 
   // Handle space (toggle selection)
   screen.key('space', () => {
+    // Don't do anything if prompt selection is active
+    if (state.isPromptSelectMode) {
+      return;
+    }
+
     // Skip if infoBox has focus - let the infoBox space handler handle it
     if (state.activeBox === 'infoBox') return;
 
@@ -696,6 +701,11 @@ function setupToggleAllHandler(screen, treeBox, infoBox, statusBox, templateSele
   const state = stateManager.getState();
 
   screen.key('a', () => {
+    // Don't do anything if prompt selection is active
+    if (state.isPromptSelectMode) {
+      return;
+    }
+
     // Only handle when treeBox has focus
     if (state.activeBox !== 'treeBox') return;
     if (state.isSearchActive) {
@@ -1071,7 +1081,7 @@ function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resol
       state.searchResults = [];
       state.searchListToNodeMap = []; // Clear the search list to node map
       treeView.renderTree(treeBox, state.originalTree);
-      statusView.updateStatus(statusBox, false, false, templateSelectBox);
+      statusView.updateStatus(statusBox, false, false);
       screen.render();
     } else if (!templateSelectBox.hidden) {
       // Close the template selection UI and return to main UI
@@ -1081,8 +1091,36 @@ function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resol
       // Force a complete redraw of the screen
       screen.clearRegion(0, screen.width, 0, screen.height);
       screen.render();
+    } else if (state.isPromptSelectMode || !promptSelectBox.hidden) {
+      // Close the prompt selection UI and return to main UI
+      promptSelectBox.hide();
+      promptSelectBox.hidden = true;
+      state.isPromptSelectMode = false;
+      treeBox.focus();
+      // Force a complete redraw of the screen
+      screen.clearRegion(0, screen.width, 0, screen.height);
+      screen.render();
+    } else if (state.isPromptAddMode || !promptAddBox.hidden) {
+      // Close the prompt add UI and return to prompt selection
+      promptAddBox.hide();
+      promptAddBox.hidden = true;
+      state.isPromptAddMode = false;
+      // If prompt content box is also open, close it
+      if (!promptContentBox.hidden) {
+        promptContentBox.hide();
+        promptContentBox.hidden = true;
+      }
+      // Return to prompt selection if it was active
+      if (state.isPromptSelectMode) {
+        promptSelectBox.focus();
+      } else {
+        treeBox.focus();
+      }
+      // Force a complete redraw of the screen
+      screen.clearRegion(0, screen.width, 0, screen.height);
+      screen.render();
     } else {
-      // Regular escape behavior (quit) - only when not in search mode or template selection
+      // Regular escape behavior (quit) - only when not in any modal state
       screen.destroy();
       resolvePromise(stateManager.getEmptyResult());
     }
@@ -1154,7 +1192,7 @@ function setupPromptSelectionBoxHandlers(promptSelectBox, promptAddBox, promptCo
     promptSelectBox.hidden = true;
     state.isPromptSelectMode = false;
     treeBox.focus();
-    statusView.updateStatus(statusBox, state.isSearchActive, false, null);
+    statusView.updateStatus(statusBox, state.isSearchActive, false);
     screen.render();
   });
 }

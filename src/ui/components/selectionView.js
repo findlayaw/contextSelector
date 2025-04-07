@@ -77,7 +77,7 @@ function updateTokenCount() {
 
   // Add mode-specific token estimates
   const modeHandler = require('../modeHandler');
-  
+
   if (state.selectedFiles.length > 0) {
     if (state.currentMode === modeHandler.MODES.GRAPH) {
       // Rough estimate for graph information based on number of files
@@ -101,6 +101,18 @@ function updateTokenCount() {
         // If including file contents, add tokens for the structure on top of file contents
         state.tokenCount += state.selectedFiles.length * 25;
       }
+    }
+  }
+
+  // Add token count for selected prompts
+  if (state.selectedPrompts.size > 0) {
+    // Add rough overhead for the "# INSTRUCTIONS" header and spacing
+    state.tokenCount += 10;
+
+    for (const promptContent of state.selectedPrompts.values()) {
+      state.tokenCount += tokenCounter.countTokens(promptContent);
+      // Add small overhead per prompt for spacing
+      state.tokenCount += 5;
     }
   }
 }
