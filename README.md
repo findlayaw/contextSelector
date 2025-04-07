@@ -11,6 +11,7 @@ A terminal-based tool for selecting files from your codebase to provide context 
 - Real-time token counting of the entire formatted output
 - Search for files and folders
 - Save and load selection templates
+- Manage and include instruction prompts with your code context
 - Graph mode for analyzing code relationships
 - Code Maps mode for extracting code structure
 - Multiple output formats (Markdown and XML)
@@ -87,16 +88,18 @@ You can toggle between modes while the application is running by pressing `m`.
 - **a**: Toggle selection of all visible files (includes folders as well)
 - **Shift + ↑/↓**: Highlight multiple files at once (press Space to select highlighted files)
 
-### Templates and Actions
+### Templates, Prompts, and Actions
 - **/**: Search for files and folders
 - **t**: Load a saved template
 - **s**: Save current selection as a template
-- **d**: Delete a template (when in template selection view)
+- **d**: Delete a template (when in template selection view) or prompt (when in prompt selection view)
+- **p**: Open prompt selection view
+- **a**: Add a new prompt (when in prompt selection view)
 - **m**: Toggle between different modes (Standard, Graph Analysis, Code Maps)
 - **o**: Toggle output format (Markdown, XML) and file content inclusion for CodeMaps mode
 - **c**: Copy selected files to clipboard and exit
 - **q**: Quit without copying
-- **Escape**: Exit search mode, close template selection, or quit
+- **Escape**: Exit search mode, close template/prompt selection, or quit
 
 ## Output Formats
 
@@ -104,7 +107,44 @@ The tool supports multiple output formats:
 
 ### Markdown Format (Default)
 
-By default, the tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension.
+By default, the tool formats the selected files in Markdown with fenced code blocks, which is optimal for LLM comprehension. Selected prompts are included at the end of the output in an "INSTRUCTIONS" section.
+
+````markdown
+# Project Directory Structure
+
+```
+project/
+  src/
+    index.js
+  package.json
+```
+
+---
+
+# Selected Files
+
+## src/index.js
+
+```javascript
+console.log('Hello, world!');
+```
+
+---
+
+# INSTRUCTIONS
+
+Please analyze this code and suggest improvements for performance and readability.
+Focus on potential bugs and edge cases that might not be handled properly.
+
+When responding, please format your answer with these sections:
+1. Code Overview
+2. Performance Issues
+3. Readability Improvements
+4. Potential Bugs
+
+---
+````
+
 
 ### XML Format
 
@@ -135,6 +175,20 @@ You can also use XML format by pressing `o` or using the `--xml` command line op
     </file>
     <!-- More files... -->
   </files>
+
+  <instructions>
+    <prompt><![CDATA[
+    Please analyze this code and suggest improvements for performance and readability.
+    Focus on potential bugs and edge cases that might not be handled properly.
+    ]]></prompt>
+    <prompt><![CDATA[
+    When responding, please format your answer with these sections:
+    1. Code Overview
+    2. Performance Issues
+    3. Readability Improvements
+    4. Potential Bugs
+    ]]></prompt>
+  </instructions>
 </context>
 ```
 
@@ -399,6 +453,33 @@ To manage templates:
 - Press `t` to open the template selection view
 - Select a template and press Enter to load it
 - Press `d` while in the template selection view to delete the selected template
+
+## Prompts
+
+The prompts feature allows you to create, manage, and include instruction prompts with your code context. Prompts are stored in `~/.context-selector/prompts/`.
+
+### Managing Prompts
+
+- Press `p` to open the prompt selection view
+- Use `Space` to toggle selection of prompts (multiple can be selected)
+- Press `a` to add a new prompt
+  - Enter a name for the prompt and press Enter
+  - Enter the prompt content in the text area
+  - Press `Ctrl+S` to save the prompt
+- Press `d` to delete a prompt
+- Press `Enter` to confirm your selection and return to the main view
+
+### Using Prompts
+
+Selected prompts are included in the output when you copy the context:
+
+- In Markdown format, prompts appear in an "INSTRUCTIONS" section at the end of the output
+- In XML format, prompts are included in an `<instructions>` section with each prompt in a `<prompt>` tag
+
+This feature is particularly useful for:
+- Including consistent instructions with your code context
+- Saving frequently used prompts for different types of tasks
+- Providing specific guidance to the LLM about how to interpret the code
 
 ## License
 
