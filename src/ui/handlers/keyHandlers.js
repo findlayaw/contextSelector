@@ -154,6 +154,8 @@ function setupKeyHandlers(screen, components, resolvePromise) {
     // Ensure the search box is properly shown
     searchBox.hidden = false;
     searchBox.show();
+    // Clear the previous search value
+    searchBox.setValue('');
     searchBox.focus();
     screen.render();
   });
