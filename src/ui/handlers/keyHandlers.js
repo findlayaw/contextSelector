@@ -197,6 +197,9 @@ function setupKeyHandlers(screen, components, resolvePromise) {
   // Add key handlers for up/down navigation to maintain padding
   setupNavigationHandlers(treeBox, screen);
 
+  // Add key handlers for up/down navigation in infoBox to maintain padding
+  setupInfoBoxNavigationHandlers(infoBox, screen);
+
   // Add Vim-like navigation handlers
   setupVimNavigationHandlers(screen, treeBox);
 
@@ -1061,6 +1064,25 @@ function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resol
       screen.destroy();
       resolvePromise(stateManager.getEmptyResult());
     }
+  });
+}
+
+/**
+ * Setup navigation handlers for up/down keys in the infoBox
+ * @param {Object} infoBox - Info box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupInfoBoxNavigationHandlers(infoBox, screen) {
+  // Add key handlers for up/down navigation to maintain padding
+  infoBox.key(['up', 'down'], () => {
+    // Calculate the scroll position to maintain padding at the top
+    const currentSelection = infoBox.selected;
+    const paddingLines = 3; // Number of lines to show above the selected item
+    const scrollPosition = Math.max(0, currentSelection - paddingLines);
+
+    // Scroll to the calculated position
+    infoBox.scrollTo(scrollPosition);
+    screen.render();
   });
 }
 
