@@ -26,7 +26,7 @@ function toggleFileSelection(node) {
  */
 function areAllFilesInDirectorySelected(node) {
   const state = stateManager.getState();
-  
+
   if (!node || node.type !== 'directory') return false;
 
   // If there are no children, check if this empty directory is in the selectedEmptyDirs array
@@ -34,7 +34,30 @@ function areAllFilesInDirectorySelected(node) {
     return state.selectedEmptyDirs.some(dir => dir.path === node.path);
   }
 
-  // Check all children
+  // Special handling for search mode
+  if (state.isSearchActive) {
+    // In search mode, only check files that are part of the search results
+    const directoryPath = node.path;
+    const filesInSearchResults = state.searchResults.filter(result =>
+      result.type === 'file' &&
+      result.path.startsWith(directoryPath + '\\')
+    );
+
+    // If there are no files in search results for this directory, return false
+    if (filesInSearchResults.length === 0) return false;
+
+    // Check if all files in search results for this directory are selected
+    for (const file of filesInSearchResults) {
+      if (!isFileSelected(file)) {
+        return false;
+      }
+    }
+
+    // All files in search results for this directory are selected
+    return true;
+  }
+
+  // Normal mode - Check all children
   for (const child of node.children) {
     if (child.type === 'file') {
       // If any file is not selected, return false
@@ -59,13 +82,13 @@ function areAllFilesInDirectorySelected(node) {
  */
 function selectAllFilesInDirectory(node) {
   if (!node || node.type !== 'directory') return;
+  const state = stateManager.getState();
 
   // Check if all files are already selected
   const allSelected = areAllFilesInDirectorySelected(node);
 
   // Handle empty directories
   if (!node.children || node.children.length === 0) {
-    const state = stateManager.getState();
     if (allSelected) {
       // If already selected, remove from selectedEmptyDirs
       const index = state.selectedEmptyDirs.findIndex(dir => dir.path === node.path);
@@ -81,19 +104,46 @@ function selectAllFilesInDirectory(node) {
     return;
   }
 
-  // Process children for non-empty directories
+  // Special handling for search mode
+  if (state.isSearchActive) {
+    // In search mode, only select/deselect files that are part of the search results
+    // Get all files in the search results that are in this directory
+    const directoryPath = node.path;
+    const filesInSearchResults = state.searchResults.filter(result =>
+      result.type === 'file' &&
+      result.path.startsWith(directoryPath + '\\') // Make sure it's a direct child or descendant
+    );
+
+    if (allSelected) {
+      // Deselect all files in search results that are in this directory
+      filesInSearchResults.forEach(file => {
+        const index = state.selectedFiles.findIndex(f => f.path === file.path);
+        if (index !== -1) {
+          state.selectedFiles.splice(index, 1);
+        }
+      });
+    } else {
+      // Select all files in search results that are in this directory
+      filesInSearchResults.forEach(file => {
+        if (!isFileSelected(file)) {
+          state.selectedFiles.push(file);
+        }
+      });
+    }
+    return;
+  }
+
+  // Normal mode (not search) - Process children for non-empty directories
   for (const child of node.children) {
     if (child.type === 'file') {
       // If all files are selected, deselect this file
       // Otherwise, select this file if it's not already selected
       if (allSelected) {
-        const state = stateManager.getState();
         const index = state.selectedFiles.findIndex(f => f.path === child.path);
         if (index !== -1) {
           state.selectedFiles.splice(index, 1);
         }
       } else if (!isFileSelected(child)) {
-        const state = stateManager.getState();
         state.selectedFiles.push(child);
       }
     } else if (child.type === 'directory') {
@@ -126,7 +176,25 @@ function selectAllFilesInSubdirectory(node) {
     return;
   }
 
-  // Process children for non-empty directories
+  // Special handling for search mode
+  if (state.isSearchActive) {
+    // In search mode, only select files that are part of the search results
+    const directoryPath = node.path;
+    const filesInSearchResults = state.searchResults.filter(result =>
+      result.type === 'file' &&
+      result.path.startsWith(directoryPath + '\\')
+    );
+
+    // Select all files in search results that are in this directory
+    filesInSearchResults.forEach(file => {
+      if (!isFileSelected(file)) {
+        state.selectedFiles.push(file);
+      }
+    });
+    return;
+  }
+
+  // Normal mode - Process children for non-empty directories
   for (const child of node.children) {
     if (child.type === 'file') {
       // Add the file if it's not already selected
@@ -158,7 +226,26 @@ function deselectAllFilesInDirectory(node) {
     return;
   }
 
-  // Process children for non-empty directories
+  // Special handling for search mode
+  if (state.isSearchActive) {
+    // In search mode, only deselect files that are part of the search results
+    const directoryPath = node.path;
+    const filesInSearchResults = state.searchResults.filter(result =>
+      result.type === 'file' &&
+      result.path.startsWith(directoryPath + '\\')
+    );
+
+    // Deselect all files in search results that are in this directory
+    filesInSearchResults.forEach(file => {
+      const index = state.selectedFiles.findIndex(f => f.path === file.path);
+      if (index !== -1) {
+        state.selectedFiles.splice(index, 1);
+      }
+    });
+    return;
+  }
+
+  // Normal mode - Process children for non-empty directories
   for (const child of node.children) {
     if (child.type === 'file') {
       // Remove the file if it's selected
@@ -180,7 +267,7 @@ function deselectAllFilesInDirectory(node) {
  */
 function isFileSelected(node) {
   const state = stateManager.getState();
-  
+
   if (node.type === 'file') {
     return state.selectedFiles.some(f => f.path === node.path);
   } else if (node.type === 'directory') {
@@ -195,7 +282,7 @@ function isFileSelected(node) {
  */
 function updateHighlightedIndices(box) {
   const state = stateManager.getState();
-  
+
   // If multi-selection is not active, do nothing
   if (state.multiSelectStartIndex === -1) return;
 
