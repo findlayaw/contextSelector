@@ -310,6 +310,15 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, select
     result += '---\n\n';
   }
 
+  // Add selected prompts if any exist
+  if (selectedPrompts && selectedPrompts.length > 0) {
+    result += '# INSTRUCTIONS\n\n';
+    selectedPrompts.forEach(promptContent => {
+      result += `${promptContent}\n\n`;
+    });
+    result += '---\n\n';
+  }
+
   return result;
 }
 
