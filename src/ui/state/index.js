@@ -13,35 +13,41 @@ const state = {
   selectedEmptyDirs: [],
   directoryTree: null,
   tokenCount: 0,
-  
+
   // UI state
   expandedDirs: new Set(),
   activeBox: 'treeBox',
-  
+
   // Search state
   isSearchActive: false,
   searchResults: [],
   originalTree: null,
   groupedResults: {},
   searchListToNodeMap: [], // Map display indices to actual nodes in search mode
-  
+
   // Template state
   templateToSave: null,
   templateFiles: [],
-  
+
+  // Prompt state
+  availablePrompts: [], // Array of prompt names
+  selectedPrompts: new Map(), // Map of selected prompts: name -> content
+  isPromptSelectMode: false, // Whether prompt selection UI is active
+  isPromptAddMode: false, // Whether prompt adding UI is active
+
   // Multi-selection state
   multiSelectStartIndex: -1,
   highlightedIndices: new Set(),
-  
+
   // Mode state
   currentMode: modeHandler.MODES.STANDARD,
-  
+
   // CodeMaps options
   includeContents: false,
-  
+
   // Output format
   currentOutputFormat: outputHandler.OUTPUT_FORMATS.MARKDOWN,
-  
+
   // Flattened tree for node lookup
   flattenedTree: []
 };
@@ -87,6 +93,10 @@ function resetState() {
   state.searchListToNodeMap = [];
   state.templateToSave = null;
   state.templateFiles = [];
+  state.availablePrompts = [];
+  state.selectedPrompts = new Map();
+  state.isPromptSelectMode = false;
+  state.isPromptAddMode = false;
   state.multiSelectStartIndex = -1;
   state.highlightedIndices = new Set();
   state.flattenedTree = [];
@@ -112,6 +122,7 @@ function getResult() {
     tokenCount: state.tokenCount,
     saveTemplate: state.templateToSave,
     templateFiles: state.templateFiles.length > 0 ? state.templateFiles : null,
+    selectedPrompts: Array.from(state.selectedPrompts.values()), // Return array of selected prompt contents
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat
@@ -130,6 +141,7 @@ function getEmptyResult() {
     tokenCount: 0,
     saveTemplate: null,
     templateFiles: null,
+    selectedPrompts: [],
     mode: state.currentMode,
     includeContents: state.includeContents,
     outputFormat: state.currentOutputFormat

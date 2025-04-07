@@ -50,13 +50,15 @@ async function run(options) {
           formattedContent = await graphXmlFormatter.formatGraphForLLM(
             result.selectedFiles,
             result.directoryTree,
-            codeGraph
+            codeGraph,
+            result.selectedPrompts
           );
         } else {
           formattedContent = await graphFormatter.formatGraphForLLM(
             result.selectedFiles,
             result.directoryTree,
-            codeGraph
+            codeGraph,
+            result.selectedPrompts
           );
         }
 
@@ -75,7 +77,8 @@ async function run(options) {
             {
               // Include file contents if specified in options or from terminal UI
               includeFileContents: result.includeContents
-            }
+            },
+            result.selectedPrompts
           );
         } else {
           formattedContent = await codeMapsFormatter.formatCodeMapsForLLM(
@@ -85,7 +88,8 @@ async function run(options) {
             {
               // Include file contents if specified in options or from terminal UI
               includeFileContents: result.includeContents
-            }
+            },
+            result.selectedPrompts
           );
         }
 
@@ -95,12 +99,14 @@ async function run(options) {
         if (result.outputFormat === outputHandler.OUTPUT_FORMATS.XML) {
           formattedContent = await xmlFormatter.formatForLLM(
             result.selectedFiles,
-            result.directoryTree
+            result.directoryTree,
+            result.selectedPrompts
           );
         } else {
           formattedContent = await formatter.formatForLLM(
             result.selectedFiles,
-            result.directoryTree
+            result.directoryTree,
+            result.selectedPrompts
           );
         }
       }

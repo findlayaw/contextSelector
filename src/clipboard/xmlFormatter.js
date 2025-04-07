@@ -5,9 +5,10 @@ const fileSystem = require('../simpleFileSystem');
  * Format selected files for LLM consumption in XML format
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
+ * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard in XML format
  */
-async function formatForLLM(selectedFiles, directoryTree) {
+async function formatForLLM(selectedFiles, directoryTree, selectedPrompts = []) {
   let result = '';
 
   // Add XML header
@@ -39,6 +40,22 @@ async function formatForLLM(selectedFiles, directoryTree) {
   }
 
   result += '  </files>\n';
+
+  // Add instructions section if prompts are selected
+  if (selectedPrompts && selectedPrompts.length > 0) {
+    result += '\n  <instructions>\n';
+    selectedPrompts.forEach(promptContent => {
+      result += '    <prompt><![CDATA[\n';
+      result += promptContent;
+      // Ensure prompt ends with a newline for CDATA correctness
+      if (!promptContent.endsWith('\n')) {
+        result += '\n';
+      }
+      result += '    ]]></prompt>\n';
+    });
+    result += '  </instructions>\n';
+  }
+
   result += '</context>';
 
   return result;

@@ -10,6 +10,7 @@ const statusView = require('../components/statusView');
 const searchHandler = require('./searchHandler');
 const selectionHandler = require('./selectionHandler');
 const templateHandler = require('./templateHandler');
+const promptHandler = require('./promptHandler');
 const search = require('../../utils/search');
 
 /**
@@ -21,7 +22,8 @@ const search = require('../../utils/search');
 function setupKeyHandlers(screen, components, resolvePromise) {
   const {
     treeBox, infoBox, statusBox, searchBox,
-    templateNameBox, templateSelectBox, confirmationBox
+    templateNameBox, templateSelectBox, confirmationBox,
+    promptSelectBox, promptAddBox, promptContentBox
   } = components;
 
   const state = stateManager.getState();
@@ -90,6 +92,11 @@ function setupKeyHandlers(screen, components, resolvePromise) {
 
   // Handle space (toggle selection)
   screen.key('space', () => {
+    // Don't do anything if prompt selection is active
+    if (state.isPromptSelectMode) {
+      return;
+    }
+
     // Skip if infoBox has focus - let the infoBox space handler handle it
     if (state.activeBox === 'infoBox') return;
 
@@ -166,6 +173,17 @@ function setupKeyHandlers(screen, components, resolvePromise) {
     screen.render();
   });
 
+  // Handle prompt selection key
+  screen.key('p', async () => {
+    // Only allow opening if not already in another modal input state
+    if (searchBox.hidden && templateNameBox.hidden && templateSelectBox.hidden &&
+        confirmationBox.hidden && promptAddBox.hidden && promptContentBox.hidden) {
+      state.isPromptSelectMode = true;
+      await promptHandler.showPromptSelection(promptSelectBox);
+      screen.render();
+    }
+  });
+
   // Handle save template key
   screen.key('s', () => {
     if (state.selectedFiles.length > 0 || state.selectedEmptyDirs.length > 0) {
@@ -193,6 +211,15 @@ function setupKeyHandlers(screen, components, resolvePromise) {
 
   // Handle template selection box events
   setupTemplateSelectionBoxHandlers(templateSelectBox, treeBox, infoBox, statusBox, confirmationBox, screen);
+
+  // Handle prompt selection box events
+  setupPromptSelectionBoxHandlers(promptSelectBox, promptAddBox, promptContentBox, treeBox, statusBox, confirmationBox, screen);
+
+  // Handle prompt add box events
+  setupPromptAddBoxHandlers(promptAddBox, promptContentBox, promptSelectBox, screen);
+
+  // Handle prompt content box events
+  setupPromptContentBoxHandlers(promptAddBox, promptContentBox, promptSelectBox, statusBox, screen);
 
   // Add key handlers for up/down navigation to maintain padding
   setupNavigationHandlers(treeBox, screen);
@@ -222,7 +249,7 @@ function setupKeyHandlers(screen, components, resolvePromise) {
   setupInfoBoxHandlers(infoBox, treeBox, statusBox, templateSelectBox, screen);
 
   // Add escape key handler
-  setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resolvePromise);
+  setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, promptSelectBox, promptAddBox, promptContentBox, resolvePromise);
 }
 
 /**
@@ -674,6 +701,11 @@ function setupToggleAllHandler(screen, treeBox, infoBox, statusBox, templateSele
   const state = stateManager.getState();
 
   screen.key('a', () => {
+    // Don't do anything if prompt selection is active
+    if (state.isPromptSelectMode) {
+      return;
+    }
+
     // Only handle when treeBox has focus
     if (state.activeBox !== 'treeBox') return;
     if (state.isSearchActive) {
@@ -1037,9 +1069,12 @@ function setupInfoBoxHandlers(infoBox, treeBox, statusBox, templateSelectBox, sc
  * @param {Object} treeBox - Tree box component
  * @param {Object} statusBox - Status box component
  * @param {Object} templateSelectBox - Template selection box component
+ * @param {Object} promptSelectBox - Prompt selection box component
+ * @param {Object} promptAddBox - Prompt add box component
+ * @param {Object} promptContentBox - Prompt content box component
  * @param {Function} resolvePromise - Function to resolve the terminal promise
  */
-function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resolvePromise) {
+function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, promptSelectBox, promptAddBox, promptContentBox, resolvePromise) {
   const state = stateManager.getState();
 
   screen.key('escape', () => {
@@ -1049,7 +1084,7 @@ function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resol
       state.searchResults = [];
       state.searchListToNodeMap = []; // Clear the search list to node map
       treeView.renderTree(treeBox, state.originalTree);
-      statusView.updateStatus(statusBox, false, false, templateSelectBox);
+      statusView.updateStatus(statusBox, false, false);
       screen.render();
     } else if (!templateSelectBox.hidden) {
       // Close the template selection UI and return to main UI
@@ -1059,8 +1094,36 @@ function setupEscapeHandler(screen, treeBox, statusBox, templateSelectBox, resol
       // Force a complete redraw of the screen
       screen.clearRegion(0, screen.width, 0, screen.height);
       screen.render();
+    } else if (state.isPromptSelectMode || !promptSelectBox.hidden) {
+      // Close the prompt selection UI and return to main UI
+      promptSelectBox.hide();
+      promptSelectBox.hidden = true;
+      state.isPromptSelectMode = false;
+      treeBox.focus();
+      // Force a complete redraw of the screen
+      screen.clearRegion(0, screen.width, 0, screen.height);
+      screen.render();
+    } else if (state.isPromptAddMode || !promptAddBox.hidden) {
+      // Close the prompt add UI and return to prompt selection
+      promptAddBox.hide();
+      promptAddBox.hidden = true;
+      state.isPromptAddMode = false;
+      // If prompt content box is also open, close it
+      if (!promptContentBox.hidden) {
+        promptContentBox.hide();
+        promptContentBox.hidden = true;
+      }
+      // Return to prompt selection if it was active
+      if (state.isPromptSelectMode) {
+        promptSelectBox.focus();
+      } else {
+        treeBox.focus();
+      }
+      // Force a complete redraw of the screen
+      screen.clearRegion(0, screen.width, 0, screen.height);
+      screen.render();
     } else {
-      // Regular escape behavior (quit) - only when not in search mode or template selection
+      // Regular escape behavior (quit) - only when not in any modal state
       screen.destroy();
       resolvePromise(stateManager.getEmptyResult());
     }
@@ -1082,6 +1145,131 @@ function setupInfoBoxNavigationHandlers(infoBox, screen) {
 
     // Scroll to the calculated position
     infoBox.scrollTo(scrollPosition);
+    screen.render();
+  });
+}
+
+/**
+ * Setup prompt selection box event handlers
+ * @param {Object} promptSelectBox - Prompt selection box component
+ * @param {Object} promptAddBox - Prompt add box component
+ * @param {Object} promptContentBox - Prompt content box component
+ * @param {Object} treeBox - Tree box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} confirmationBox - Confirmation box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupPromptSelectionBoxHandlers(promptSelectBox, promptAddBox, promptContentBox, treeBox, statusBox, confirmationBox, screen) {
+  const state = stateManager.getState();
+
+  // Handle escape and ctrl+c to close prompt selection
+  promptSelectBox.key(['escape', 'C-c'], () => {
+    promptSelectBox.hide();
+    promptSelectBox.hidden = true;
+    state.isPromptSelectMode = false;
+    treeBox.focus();
+    screen.render();
+  });
+
+  // Handle space to toggle prompt selection
+  promptSelectBox.key('space', async () => {
+    await promptHandler.togglePromptSelection(promptSelectBox);
+    screen.render();
+  });
+
+  // Handle 'd' to delete prompt
+  promptSelectBox.key('d', async () => {
+    await promptHandler.deleteSelectedPrompt(promptSelectBox, confirmationBox, statusBox);
+    screen.render();
+  });
+
+  // Handle 'a' to add a new prompt
+  promptSelectBox.key('a', () => {
+    promptHandler.initiateAddPrompt(promptSelectBox, promptAddBox);
+    screen.render();
+  });
+
+  // Handle 'enter' to confirm selection and close
+  promptSelectBox.key('enter', () => {
+    promptSelectBox.hide();
+    promptSelectBox.hidden = true;
+    state.isPromptSelectMode = false;
+    treeBox.focus();
+    statusView.updateStatus(statusBox, state.isSearchActive, false);
+    screen.render();
+  });
+}
+
+/**
+ * Setup prompt add box (name input) event handlers
+ * @param {Object} promptAddBox - Prompt add box component
+ * @param {Object} promptContentBox - Prompt content box component
+ * @param {Object} promptSelectBox - Prompt selection box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupPromptAddBoxHandlers(promptAddBox, promptContentBox, promptSelectBox, screen) {
+  const state = stateManager.getState();
+
+  // Handle escape and ctrl+c to cancel adding prompt
+  promptAddBox.key(['escape', 'C-c'], () => {
+    promptAddBox.hide();
+    promptAddBox.hidden = true;
+    state.isPromptAddMode = false;
+    promptSelectBox.focus();
+    screen.render();
+  });
+
+  // Handle enter to proceed to content input
+  promptAddBox.key('enter', () => {
+    const promptName = promptAddBox.getValue();
+    if (promptName) {
+      promptAddBox.hide();
+      promptAddBox.hidden = true;
+      // Show the content input box
+      promptContentBox.hidden = false;
+      promptContentBox.focus();
+      promptContentBox.setValue(''); // Clear previous content
+      screen.render();
+    }
+  });
+}
+
+/**
+ * Setup prompt content box (textarea) event handlers
+ * @param {Object} promptAddBox - Prompt add box component
+ * @param {Object} promptContentBox - Prompt content box component
+ * @param {Object} promptSelectBox - Prompt selection box component
+ * @param {Object} statusBox - Status box component
+ * @param {Object} screen - Blessed screen
+ */
+function setupPromptContentBoxHandlers(promptAddBox, promptContentBox, promptSelectBox, statusBox, screen) {
+  const state = stateManager.getState();
+
+  // Use Ctrl+S to save, standard Enter key adds newline in textarea
+  promptContentBox.key('C-s', async () => {
+    const promptName = promptAddBox.getValue(); // Get name from the (now hidden) name box
+    const promptContent = promptContentBox.getValue();
+
+    if (promptName && promptContent) {
+      await promptHandler.saveNewPrompt(promptName, promptContent, statusBox);
+
+      promptContentBox.hide();
+      promptContentBox.hidden = true;
+      state.isPromptAddMode = false;
+
+      // Refresh and show the prompt selection list again
+      await promptHandler.showPromptSelection(promptSelectBox);
+      promptSelectBox.focus();
+      screen.render();
+    }
+  });
+
+  // Handle escape to cancel content input
+  promptContentBox.key(['escape'], () => {
+    promptContentBox.hide();
+    promptContentBox.hidden = true;
+    state.isPromptAddMode = false;
+    promptSelectBox.focus();
     screen.render();
   });
 }
