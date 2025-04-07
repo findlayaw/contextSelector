@@ -40,6 +40,22 @@ async function formatForLLM(selectedFiles, directoryTree, selectedPrompts = []) 
   }
 
   result += '  </files>\n';
+
+  // Add instructions section if prompts are selected
+  if (selectedPrompts && selectedPrompts.length > 0) {
+    result += '\n  <instructions>\n';
+    selectedPrompts.forEach(promptContent => {
+      result += '    <prompt><![CDATA[\n';
+      result += promptContent;
+      // Ensure prompt ends with a newline for CDATA correctness
+      if (!promptContent.endsWith('\n')) {
+        result += '\n';
+      }
+      result += '    ]]></prompt>\n';
+    });
+    result += '  </instructions>\n';
+  }
+
   result += '</context>';
 
   return result;
