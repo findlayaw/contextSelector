@@ -6,9 +6,10 @@ const tokenCounter = require('../utils/tokenCounter');
  * Format selected files for LLM consumption
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
+ * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard
  */
-async function formatForLLM(selectedFiles, directoryTree) {
+async function formatForLLM(selectedFiles, directoryTree, selectedPrompts = []) {
   let result = '';
 
   // Add directory tree
@@ -42,6 +43,15 @@ async function formatForLLM(selectedFiles, directoryTree) {
     result += '```\n\n';
 
     // Add horizontal rule as separator between files
+    result += '---\n\n';
+  }
+
+  // Add selected prompts if any exist
+  if (selectedPrompts && selectedPrompts.length > 0) {
+    result += '# INSTRUCTIONS\n\n';
+    selectedPrompts.forEach(promptContent => {
+      result += `${promptContent}\n\n`;
+    });
     result += '---\n\n';
   }
 

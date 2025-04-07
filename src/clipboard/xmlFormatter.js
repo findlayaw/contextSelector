@@ -5,9 +5,10 @@ const fileSystem = require('../simpleFileSystem');
  * Format selected files for LLM consumption in XML format
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
+ * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard in XML format
  */
-async function formatForLLM(selectedFiles, directoryTree) {
+async function formatForLLM(selectedFiles, directoryTree, selectedPrompts = []) {
   let result = '';
 
   // Add XML header

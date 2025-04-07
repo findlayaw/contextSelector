@@ -8,9 +8,10 @@ const fileSystem = require('../simpleFileSystem');
  * @param {Object} codeMaps - Code maps object
  * @param {Object} options - Formatting options
  * @param {boolean} options.includeFileContents - Whether to include full file contents (default: false)
+ * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard in XML format
  */
-async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, options = {}) {
+async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, options = {}, selectedPrompts = []) {
   // Set default options
   const includeFileContents = options.includeFileContents !== undefined ? options.includeFileContents : false;
   let result = '';
@@ -28,23 +29,23 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
 
   // Add code maps section
   result += '  <code_maps>\n';
-  
+
   // Add file definitions
   result += '    <file_definitions>\n';
   for (const file of codeMaps.files) {
     result += '      <file>\n';
     result += `        <path>${escapeXml(file.path)}</path>\n`;
     result += `        <language>${escapeXml(file.language)}</language>\n`;
-    
+
     // Add package/namespace if available
     if (file.package) {
       result += `        <package>${escapeXml(file.package)}</package>\n`;
     }
-    
+
     if (file.namespace) {
       result += `        <namespace>${escapeXml(file.namespace)}</namespace>\n`;
     }
-    
+
     // Add imports
     if (file.imports && file.imports.length > 0) {
       result += '        <imports>\n';
@@ -62,19 +63,19 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       }
       result += '        </imports>\n';
     }
-    
+
     // Add classes
     if (file.classes && file.classes.length > 0) {
       result += '        <classes>\n';
       for (const cls of file.classes) {
         result += '          <class>\n';
         result += `            <name>${escapeXml(cls.name)}</name>\n`;
-        
+
         // Add extends
         if (cls.extends) {
           result += `            <extends>${escapeXml(cls.extends)}</extends>\n`;
         }
-        
+
         // Add implements
         if (cls.implements && cls.implements.length > 0) {
           result += '            <implements>\n';
@@ -83,7 +84,7 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
           }
           result += '            </implements>\n';
         }
-        
+
         // Add properties
         if (cls.properties && cls.properties.length > 0) {
           result += '            <properties>\n';
@@ -103,7 +104,7 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
           }
           result += '            </properties>\n';
         }
-        
+
         // Add methods
         if (cls.methods && cls.methods.length > 0) {
           result += '            <methods>\n';
@@ -119,7 +120,7 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
             if (method.static) {
               result += '                <static>true</static>\n';
             }
-            
+
             // Add parameters
             if (method.parameters && method.parameters.length > 0) {
               result += '                <parameters>\n';
@@ -133,17 +134,17 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
               }
               result += '                </parameters>\n';
             }
-            
+
             result += '              </method>\n';
           }
           result += '            </methods>\n';
         }
-        
+
         result += '          </class>\n';
       }
       result += '        </classes>\n';
     }
-    
+
     // Add functions
     if (file.functions && file.functions.length > 0) {
       result += '        <functions>\n';
@@ -153,7 +154,7 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
         if (func.returnType) {
           result += `            <return_type>${escapeXml(func.returnType)}</return_type>\n`;
         }
-        
+
         // Add parameters
         if (func.parameters && func.parameters.length > 0) {
           result += '            <parameters>\n';
@@ -167,20 +168,20 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
           }
           result += '            </parameters>\n';
         }
-        
+
         result += '          </function>\n';
       }
       result += '        </functions>\n';
     }
-    
+
     result += '      </file>\n';
   }
   result += '    </file_definitions>\n';
-  
+
   // Add relationships section
   if (codeMaps.relationships && codeMaps.relationships.length > 0) {
     result += '    <relationships>\n';
-    
+
     // Group relationships by source file
     const relationshipsBySource = {};
     for (const rel of codeMaps.relationships) {
@@ -189,15 +190,15 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       }
       relationshipsBySource[rel.source].push(rel);
     }
-    
+
     // Add relationships for each source file
     for (const [source, relationships] of Object.entries(relationshipsBySource)) {
       result += `      <source_file path="${escapeXml(source)}">\n`;
       result += '        <dependencies>\n';
-      
+
       for (const rel of relationships) {
         result += `          <dependency target="${escapeXml(rel.target)}">\n`;
-        
+
         if (rel.items && rel.items.length > 0) {
           result += '            <items>\n';
           for (const item of rel.items) {
@@ -205,17 +206,17 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
           }
           result += '            </items>\n';
         }
-        
+
         result += '          </dependency>\n';
       }
-      
+
       result += '        </dependencies>\n';
       result += '      </source_file>\n';
     }
-    
+
     result += '    </relationships>\n';
   }
-  
+
   result += '  </code_maps>\n\n';
 
   // Add file contents for selected files if requested
@@ -243,16 +244,31 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
     result += '    <title>Note on Selected Files</title>\n';
     result += '    <message>Full file contents have been excluded to optimize token usage. This Code Maps view focuses on structural information and API definitions only.</message>\n';
     result += '    <selected_files>\n';
-    
+
     for (const file of selectedFiles) {
       result += `      <file_path>${file.path}</file_path>\n`;
     }
-    
+
     result += '    </selected_files>\n';
     result += '  </note>\n';
   }
 
-  result += '</context>';
+  // Add instructions section if prompts are selected
+  if (selectedPrompts && selectedPrompts.length > 0) {
+    result += '\n  <instructions>\n';
+    selectedPrompts.forEach(promptContent => {
+      result += '    <prompt><![CDATA[\n';
+      result += promptContent;
+      // Ensure prompt ends with a newline for CDATA correctness
+      if (!promptContent.endsWith('\n')) {
+        result += '\n';
+      }
+      result += '    ]]></prompt>\n';
+    });
+    result += '  </instructions>';
+  }
+
+  result += '\n</context>';
 
   return result;
 }

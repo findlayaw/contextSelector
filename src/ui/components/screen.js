@@ -167,6 +167,63 @@ function createComponents() {
     }
   });
 
+  // Create the prompt selection box
+  const promptSelectBox = blessed.list({
+    bottom: 3,
+    left: 'center',
+    width: '80%',
+    height: '50%',
+    border: {
+      type: 'line'
+    },
+    label: ' Select Prompts (Space: Toggle, d: Delete, a: Add New, Enter: Confirm) ',
+    hidden: true,
+    keys: true,
+    vi: true,
+    tags: true,
+    items: [],
+    style: {
+      selected: {
+        bg: 'blue',
+        fg: 'white'
+      }
+    }
+  });
+
+  // Create the prompt name input box
+  const promptAddBox = blessed.textbox({
+    bottom: 3,
+    left: 'center',
+    width: '80%',
+    height: 3,
+    border: {
+      type: 'line'
+    },
+    label: ' Add New Prompt Name ',
+    hidden: true,
+    keys: true,
+    inputOnFocus: true,
+    tags: true
+  });
+
+  // Create the prompt content input box (textarea for multiline)
+  const promptContentBox = blessed.textarea({
+    bottom: 6, // Position above the name box
+    left: 'center',
+    width: '80%',
+    height: '40%',
+    border: {
+      type: 'line'
+    },
+    label: ' Enter Prompt Content (Ctrl+S: Save, Esc: Cancel) ',
+    hidden: true,
+    keys: true,
+    inputOnFocus: true,
+    mouse: true, // Enable mouse for easier editing
+    tags: true,
+    vi: true // Enable vi keys for navigation within textarea
+  });
+
   // Add all elements to the screen
   screen.append(treeBox);
   screen.append(infoBox);
@@ -175,6 +232,9 @@ function createComponents() {
   screen.append(templateNameBox);
   screen.append(templateSelectBox);
   screen.append(confirmationBox);
+  screen.append(promptSelectBox);
+  screen.append(promptAddBox);
+  screen.append(promptContentBox);
 
   return {
     screen,
@@ -184,7 +244,10 @@ function createComponents() {
     searchBox,
     templateNameBox,
     confirmationBox,
-    templateSelectBox
+    templateSelectBox,
+    promptSelectBox,
+    promptAddBox,
+    promptContentBox
   };
 }
 
@@ -196,7 +259,7 @@ function createComponents() {
 function initializeUI(resolvePromise) {
   const components = createComponents();
   const { screen } = components;
-  
+
   // Set focus to the tree box and update border styles
   const state = stateManager.getState();
   state.activeBox = 'treeBox';
