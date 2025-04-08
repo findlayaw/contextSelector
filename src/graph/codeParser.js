@@ -19,7 +19,7 @@ class CodeParser {
       const content = fs.readFileSync(filePath, 'utf8');
       const extension = path.extname(filePath).toLowerCase();
       const language = this.getLanguageFromExtension(extension);
-      
+
       // Basic structure for all files
       const fileStructure = {
         path: filePath,
@@ -31,9 +31,10 @@ class CodeParser {
         functions: [],
         classes: [],
         variables: [],
-        methodCalls: []
+        methodCalls: [],
+        variableReferences: []
       };
-      
+
       // Only process JavaScript/TypeScript files for now
       if (language === 'javascript' || language === 'typescript') {
         this.extractImports(content, fileStructure);
@@ -42,8 +43,9 @@ class CodeParser {
         this.extractVariables(content, fileStructure);
         this.extractExports(content, fileStructure);
         this.extractMethodCalls(content, fileStructure);
+        this.extractVariableReferences(content, fileStructure);
       }
-      
+
       return fileStructure;
     } catch (error) {
       console.error(`Error parsing file ${filePath}:`, error.message);
@@ -60,13 +62,13 @@ class CodeParser {
     // Match require statements
     const requirePattern = /(?:const|let|var)\s+(\w+|\{[^}]+\})\s*=\s*require\(['"]([^'"]+)['"]\)/g;
     let match;
-    
+
     while ((match = requirePattern.exec(content)) !== null) {
       const importName = match[1].trim();
       const importPath = match[2];
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       fileStructure.imports.push({
         type: 'require',
         name: importName,
@@ -76,7 +78,7 @@ class CodeParser {
         column: this.getColumnNumber(content, position)
       });
     }
-    
+
     // Match ES6 imports
     // This pattern handles various import formats:
     // - import defaultExport from 'module';
@@ -84,14 +86,14 @@ class CodeParser {
     // - import * as name from 'module';
     // - import 'module';
     const importPattern = /import\s+(?:((?:\w+|\*\s+as\s+\w+)(?:\s*,\s*)?)?(?:\{\s*([^}]+)\s*\})?\s+from\s+)?['"]([^'"]+)['"]/g;
-    
+
     while ((match = importPattern.exec(content)) !== null) {
       const defaultImport = match[1] ? match[1].trim() : null;
       const namedImports = match[2] ? match[2].split(',').map(name => name.trim()) : [];
       const importPath = match[3];
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       if (defaultImport) {
         fileStructure.imports.push({
           type: 'import',
@@ -102,12 +104,12 @@ class CodeParser {
           column: this.getColumnNumber(content, position)
         });
       }
-      
+
       for (const namedImport of namedImports) {
         // Handle aliased imports (e.g., { originalName as alias })
         const importParts = namedImport.split(/\s+as\s+/);
         const importName = importParts.length > 1 ? importParts[1] : importParts[0];
-        
+
         fileStructure.imports.push({
           type: 'import',
           name: importName,
@@ -118,7 +120,7 @@ class CodeParser {
           column: this.getColumnNumber(content, position)
         });
       }
-      
+
       // If no imports were specified, it's a bare import
       if (!defaultImport && namedImports.length === 0) {
         fileStructure.imports.push({
@@ -146,19 +148,19 @@ class CodeParser {
     // - Generator function declarations: function* name(params) { ... }
     const functionPattern = /(?:async\s+)?function\s*(\*?)\s*(\w+)\s*\(([^)]*)\)/g;
     let match;
-    
+
     while ((match = functionPattern.exec(content)) !== null) {
       const isGenerator = match[1] === '*';
       const funcName = match[2];
       const params = match[3].split(',').map(p => p.trim()).filter(p => p);
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       // Find the function body
       const bodyStart = content.indexOf('{', match.index + match[0].length);
       if (bodyStart !== -1) {
         const bodyEnd = this.findMatchingBracket(content, bodyStart);
-        
+
         fileStructure.functions.push({
           name: funcName,
           type: 'function',
@@ -168,46 +170,46 @@ class CodeParser {
           line: line,
           column: this.getColumnNumber(content, position),
           bodyRange: {
-            start: { 
+            start: {
               position: bodyStart,
               line: this.getLineNumber(content, bodyStart),
               column: this.getColumnNumber(content, bodyStart)
             },
-            end: { 
+            end: {
               position: bodyEnd,
               line: this.getLineNumber(content, bodyEnd),
               column: this.getColumnNumber(content, bodyEnd)
             }
           }
         });
-        
+
         // Extract method calls within this function
         this.extractMethodCallsInRange(content, fileStructure, bodyStart, bodyEnd, funcName);
       }
     }
-    
+
     // Match arrow functions with variable assignments
     // This pattern captures:
     // - Arrow functions: const name = (params) => { ... }
     // - Arrow functions with single param: const name = param => { ... }
     // - Async arrow functions: const name = async (params) => { ... }
     const arrowFunctionPattern = /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\(([^)]*)\)|\s*(\w+)\s*)\s*=>/g;
-    
+
     while ((match = arrowFunctionPattern.exec(content)) !== null) {
       const funcName = match[1];
-      const params = match[2] ? match[2].split(',').map(p => p.trim()).filter(p => p) : 
+      const params = match[2] ? match[2].split(',').map(p => p.trim()).filter(p => p) :
                     match[3] ? [match[3]] : [];
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       // Find the function body
       const arrowPos = content.indexOf('=>', match.index);
       if (arrowPos !== -1) {
         let bodyStart, bodyEnd;
-        
+
         // Check if it's a block body or expression body
         const afterArrow = content.substring(arrowPos + 2).trim();
-        
+
         if (afterArrow.startsWith('{')) {
           bodyStart = content.indexOf('{', arrowPos);
           bodyEnd = this.findMatchingBracket(content, bodyStart);
@@ -217,7 +219,7 @@ class CodeParser {
           // Find the end of the expression (semicolon or newline)
           const semicolonPos = content.indexOf(';', bodyStart);
           const newlinePos = content.indexOf('\n', bodyStart);
-          
+
           if (semicolonPos !== -1 && (newlinePos === -1 || semicolonPos < newlinePos)) {
             bodyEnd = semicolonPos;
           } else if (newlinePos !== -1) {
@@ -226,7 +228,7 @@ class CodeParser {
             bodyEnd = content.length;
           }
         }
-        
+
         fileStructure.functions.push({
           name: funcName,
           type: 'arrow',
@@ -235,24 +237,24 @@ class CodeParser {
           line: line,
           column: this.getColumnNumber(content, position),
           bodyRange: {
-            start: { 
+            start: {
               position: bodyStart,
               line: this.getLineNumber(content, bodyStart),
               column: this.getColumnNumber(content, bodyStart)
             },
-            end: { 
+            end: {
               position: bodyEnd,
               line: this.getLineNumber(content, bodyEnd),
               column: this.getColumnNumber(content, bodyEnd)
             }
           }
         });
-        
+
         // Extract method calls within this function
         this.extractMethodCallsInRange(content, fileStructure, bodyStart, bodyEnd, funcName);
       }
     }
-    
+
     // Match method definitions in classes
     // We'll handle this in the extractClasses method
   }
@@ -269,23 +271,23 @@ class CodeParser {
     // - Class declarations with extends: class Name extends Parent { ... }
     const classPattern = /class\s+(\w+)(?:\s+extends\s+(\w+))?\s*\{/g;
     let match;
-    
+
     while ((match = classPattern.exec(content)) !== null) {
       const className = match[1];
       const extendsName = match[2] || null;
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       // Find the class body
       const bodyStart = content.indexOf('{', match.index);
       if (bodyStart !== -1) {
         const bodyEnd = this.findMatchingBracket(content, bodyStart);
         const classBody = content.substring(bodyStart, bodyEnd + 1);
-        
+
         // Extract methods and properties
         const methods = [];
         const properties = [];
-        
+
         // Match method definitions
         // This pattern captures:
         // - Regular methods: methodName(params) { ... }
@@ -295,21 +297,21 @@ class CodeParser {
         // - Getters and setters: get propertyName() { ... }
         const methodPattern = /(?:async\s+|static\s+|get\s+|set\s+|static\s+(?:async\s+|get\s+|set\s+))?(?:\*\s*)?(\w+)\s*\(([^)]*)\)\s*\{/g;
         let methodMatch;
-        
+
         while ((methodMatch = methodPattern.exec(classBody)) !== null) {
           const methodName = methodMatch[1];
           const params = methodMatch[2].split(',').map(p => p.trim()).filter(p => p);
           const methodPosition = bodyStart + methodMatch.index;
           const methodLine = this.getLineNumber(content, methodPosition);
-          
+
           // Find the method body
           const methodBodyStart = classBody.indexOf('{', methodMatch.index + methodMatch[0].length - 1);
           if (methodBodyStart !== -1) {
             const absoluteMethodBodyStart = bodyStart + methodBodyStart;
             const methodBodyEnd = this.findMatchingBracket(content, absoluteMethodBodyStart);
-            
+
             methods.push(methodName);
-            
+
             fileStructure.functions.push({
               name: methodName,
               type: 'method',
@@ -319,36 +321,36 @@ class CodeParser {
               line: methodLine,
               column: this.getColumnNumber(content, methodPosition),
               bodyRange: {
-                start: { 
+                start: {
                   position: absoluteMethodBodyStart,
                   line: this.getLineNumber(content, absoluteMethodBodyStart),
                   column: this.getColumnNumber(content, absoluteMethodBodyStart)
                 },
-                end: { 
+                end: {
                   position: methodBodyEnd,
                   line: this.getLineNumber(content, methodBodyEnd),
                   column: this.getColumnNumber(content, methodBodyEnd)
                 }
               }
             });
-            
+
             // Extract method calls within this method
             this.extractMethodCallsInRange(content, fileStructure, absoluteMethodBodyStart, methodBodyEnd, methodName);
           }
         }
-        
+
         // Match class properties
         // This pattern captures:
         // - Regular properties: propertyName = value;
         // - Static properties: static propertyName = value;
         const propertyPattern = /(?:static\s+)?(\w+)\s*=\s*(?:[^;]+);/g;
         let propertyMatch;
-        
+
         while ((propertyMatch = propertyPattern.exec(classBody)) !== null) {
           const propertyName = propertyMatch[1];
           properties.push(propertyName);
         }
-        
+
         fileStructure.classes.push({
           name: className,
           extends: extendsName,
@@ -358,12 +360,12 @@ class CodeParser {
           line: line,
           column: this.getColumnNumber(content, position),
           bodyRange: {
-            start: { 
+            start: {
               position: bodyStart,
               line: this.getLineNumber(content, bodyStart),
               column: this.getColumnNumber(content, bodyStart)
             },
-            end: { 
+            end: {
               position: bodyEnd,
               line: this.getLineNumber(content, bodyEnd),
               column: this.getColumnNumber(content, bodyEnd)
@@ -387,17 +389,17 @@ class CodeParser {
     // - var declarations: var name = value;
     const variablePattern = /(const|let|var)\s+(\w+)\s*=\s*([^;]+);/g;
     let match;
-    
+
     while ((match = variablePattern.exec(content)) !== null) {
       const kind = match[1];
       const varName = match[2];
       const value = match[3].trim();
       const position = match.index;
       const line = this.getLineNumber(content, position);
-      
+
       // Determine the value type
       let valueType = 'unknown';
-      
+
       if (value.startsWith('{') && value.endsWith('}')) {
         valueType = 'object';
       } else if (value.startsWith('[') && value.endsWith(']')) {
@@ -419,7 +421,7 @@ class CodeParser {
       } else if (value === 'undefined') {
         valueType = 'undefined';
       }
-      
+
       fileStructure.variables.push({
         name: varName,
         kind: kind,
@@ -444,7 +446,7 @@ class CodeParser {
     // - Single exports: module.exports = name;
     const moduleExportsPattern = /module\.exports\s*=\s*(?:{([^}]+)}|(\w+))/g;
     let match;
-    
+
     while ((match = moduleExportsPattern.exec(content)) !== null) {
       if (match[1]) {
         // Object export
@@ -452,21 +454,21 @@ class CodeParser {
           const parts = e.split(':').map(p => p.trim());
           return parts.length > 1 ? parts[1] : parts[0];
         });
-        
+
         fileStructure.exports = fileStructure.exports.concat(exports);
       } else if (match[2]) {
         // Single export
         fileStructure.exports.push(match[2].trim());
       }
     }
-    
+
     // Match ES6 export statements
     // This pattern captures:
     // - Named exports: export { name1, name2 };
     // - Default exports: export default name;
     // - Direct exports: export const name = value;
     const exportPattern = /export\s+(?:(default)\s+(\w+)|{([^}]+)}|(?:const|let|var|function|class)\s+(\w+))/g;
-    
+
     while ((match = exportPattern.exec(content)) !== null) {
       if (match[1] && match[2]) {
         // Default export
@@ -477,7 +479,7 @@ class CodeParser {
           const parts = e.split(/\s+as\s+/).map(p => p.trim());
           return parts.length > 1 ? parts[1] : parts[0];
         });
-        
+
         fileStructure.exports = fileStructure.exports.concat(exports);
       } else if (match[4]) {
         // Direct export
@@ -494,42 +496,42 @@ class CodeParser {
   extractMethodCalls(content, fileStructure) {
     // We'll extract method calls within function bodies in the extractFunctions method
     // This method is for extracting top-level method calls
-    
+
     // Find all top-level function and class declarations to exclude their bodies
     const excludedRanges = [];
-    
+
     // Add function bodies
     for (const func of fileStructure.functions) {
       if (func.bodyRange) {
         excludedRanges.push([func.bodyRange.start.position, func.bodyRange.end.position]);
       }
     }
-    
+
     // Add class bodies
     for (const cls of fileStructure.classes) {
       if (cls.bodyRange) {
         excludedRanges.push([cls.bodyRange.start.position, cls.bodyRange.end.position]);
       }
     }
-    
+
     // Sort excluded ranges by start position
     excludedRanges.sort((a, b) => a[0] - b[0]);
-    
+
     // Find positions that are not in any excluded range
     let currentPos = 0;
     const includedRanges = [];
-    
+
     for (const [start, end] of excludedRanges) {
       if (currentPos < start) {
         includedRanges.push([currentPos, start]);
       }
       currentPos = end + 1;
     }
-    
+
     if (currentPos < content.length) {
       includedRanges.push([currentPos, content.length]);
     }
-    
+
     // Extract method calls in included ranges
     for (const [start, end] of includedRanges) {
       this.extractMethodCallsInRange(content, fileStructure, start, end, null);
@@ -546,26 +548,26 @@ class CodeParser {
    */
   extractMethodCallsInRange(content, fileStructure, start, end, containingFunction) {
     const rangeContent = content.substring(start, end);
-    
+
     // Match method calls
     // This pattern captures:
     // - Object method calls: object.method(args)
     // - Direct function calls: function(args)
     const methodCallPattern = /(?:(\w+)\.)?(\w+)\s*\(([^)]*)\)/g;
     let match;
-    
+
     while ((match = methodCallPattern.exec(rangeContent)) !== null) {
       const objectName = match[1] || null;
       const methodName = match[2];
       const args = match[3].split(',').map(arg => arg.trim());
       const position = start + match.index;
       const line = this.getLineNumber(content, position);
-      
+
       // Skip if it's a common JavaScript keyword
       if (['if', 'for', 'while', 'switch', 'catch'].includes(methodName)) {
         continue;
       }
-      
+
       fileStructure.methodCalls.push({
         name: methodName,
         objectName: objectName,
@@ -607,22 +609,22 @@ class CodeParser {
     if (content[openPos] !== '{') {
       return -1;
     }
-    
+
     let depth = 1;
     let pos = openPos + 1;
-    
+
     while (pos < content.length && depth > 0) {
       const char = content[pos];
-      
+
       if (char === '{') {
         depth++;
       } else if (char === '}') {
         depth--;
       }
-      
+
       pos++;
     }
-    
+
     return depth === 0 ? pos - 1 : -1;
   }
 
@@ -672,8 +674,83 @@ class CodeParser {
       '.json': 'json',
       '.md': 'markdown'
     };
-    
+
     return languageMap[extension] || 'text';
+  }
+
+  /**
+   * Extract variable references from the content
+   * @param {string} content - File content
+   * @param {Object} fileStructure - The file structure to populate
+   */
+  extractVariableReferences(content, fileStructure) {
+    // Get all variable names in this file
+    const variableNames = fileStructure.variables.map(v => v.name);
+
+    if (variableNames.length === 0) {
+      return; // No variables to find references for
+    }
+
+    // Process each function and method body to find variable references
+    for (const func of fileStructure.functions) {
+      if (func.bodyRange) {
+        const bodyContent = content.substring(func.bodyRange.start.position, func.bodyRange.end.position);
+
+        // Look for each variable in the function body
+        for (const varName of variableNames) {
+          // Create a regex that matches the variable name as a whole word
+          // This avoids matching substrings of other identifiers
+          const varRegex = new RegExp(`\\b${varName}\\b`, 'g');
+          let match;
+
+          while ((match = varRegex.exec(bodyContent)) !== null) {
+            const position = func.bodyRange.start.position + match.index;
+            const line = this.getLineNumber(content, position);
+
+            fileStructure.variableReferences.push({
+              variableName: varName,
+              referencedBy: func.name,
+              referenceType: func.type, // 'function', 'arrow', or 'method'
+              position: position,
+              line: line,
+              column: this.getColumnNumber(content, position)
+            });
+          }
+        }
+      }
+    }
+
+    // Also check for variable references in method calls
+    for (const call of fileStructure.methodCalls) {
+      // Check if any variable is used as an argument
+      for (const arg of call.args) {
+        const argText = arg.text;
+
+        // Check if the argument is a variable reference
+        if (arg.type === 'identifier' && variableNames.includes(argText)) {
+          fileStructure.variableReferences.push({
+            variableName: argText,
+            referencedBy: call.containingFunction || 'global',
+            referenceType: 'argument',
+            position: call.position,
+            line: call.line,
+            column: call.column
+          });
+        }
+      }
+
+      // Check if the object name is a variable
+      if (call.objectName && variableNames.includes(call.objectName)) {
+        fileStructure.variableReferences.push({
+          variableName: call.objectName,
+          referencedBy: call.containingFunction || 'global',
+          referenceType: 'object',
+          position: call.position,
+          line: call.line,
+          column: call.column
+        });
+      }
+    }
   }
 }
 

@@ -29,7 +29,7 @@ function initGraph() {
  */
 function buildCodeGraph(selectedFiles) {
   initGraph();
-  
+
   // First pass: Parse all files and create nodes
   for (const file of selectedFiles) {
     const fileStructure = parser.parseFile(file.path);
@@ -42,7 +42,7 @@ function buildCodeGraph(selectedFiles) {
         path: fileStructure.path,
         language: fileStructure.language
       });
-      
+
       // Add function nodes
       for (const func of fileStructure.functions) {
         addNode({
@@ -56,14 +56,14 @@ function buildCodeGraph(selectedFiles) {
           line: func.line,
           column: func.column
         });
-        
+
         // Connect function to file
         addEdge({
           source: `${fileStructure.path}#${func.name}`,
           target: fileStructure.path,
           type: 'defined_in'
         });
-        
+
         // If it's a method, connect it to its class
         if (func.type === 'method' && func.className) {
           addEdge({
@@ -73,7 +73,7 @@ function buildCodeGraph(selectedFiles) {
           });
         }
       }
-      
+
       // Add class nodes
       for (const cls of fileStructure.classes) {
         addNode({
@@ -87,14 +87,14 @@ function buildCodeGraph(selectedFiles) {
           line: cls.line,
           column: cls.column
         });
-        
+
         // Connect class to file
         addEdge({
           source: `${fileStructure.path}#${cls.name}`,
           target: fileStructure.path,
           type: 'defined_in'
         });
-        
+
         // Connect class to parent class if extends
         if (cls.extends) {
           // Try to find the parent class in the parsed files
@@ -116,12 +116,12 @@ function buildCodeGraph(selectedFiles) {
           }
         }
       }
-      
+
       // Add variable nodes for important variables
       for (const variable of fileStructure.variables) {
         // Only add variables that are constants or have complex values
-        if (variable.kind === 'const' || 
-            (variable.valueType && 
+        if (variable.kind === 'const' ||
+            (variable.valueType &&
              ['object', 'array', 'function', 'arrow_function', 'class'].includes(variable.valueType))) {
           addNode({
             id: `${fileStructure.path}#${variable.name}`,
@@ -133,7 +133,7 @@ function buildCodeGraph(selectedFiles) {
             line: variable.line,
             column: variable.column
           });
-          
+
           // Connect variable to file
           addEdge({
             source: `${fileStructure.path}#${variable.name}`,
@@ -144,7 +144,7 @@ function buildCodeGraph(selectedFiles) {
       }
     }
   }
-  
+
   // Second pass: Analyze relationships between nodes
   for (const file of selectedFiles) {
     const fileStructure = parser.parseFile(file.path);
@@ -160,14 +160,14 @@ function buildCodeGraph(selectedFiles) {
             type: 'imports',
             importName: imp.name
           });
-          
+
           // If the import is a named import, try to connect to the specific exported symbol
           if (imp.name && imp.name !== '*') {
-            const targetNode = codeGraph.nodes.find(node => 
-              node.path === resolvedPath && 
+            const targetNode = codeGraph.nodes.find(node =>
+              node.path === resolvedPath &&
               (node.label === imp.name || node.name === imp.name)
             );
-            
+
             if (targetNode) {
               addEdge({
                 source: fileStructure.path,
@@ -179,24 +179,56 @@ function buildCodeGraph(selectedFiles) {
           }
         }
       }
-      
+
+      // Connect variable references
+      for (const reference of fileStructure.variableReferences) {
+        // Find the variable node
+        const variableNode = codeGraph.nodes.find(node =>
+          node.type === 'variable' &&
+          node.label === reference.variableName &&
+          node.path === fileStructure.path
+        );
+
+        if (variableNode) {
+          // Find the function/method that references the variable
+          let referencingNodeId = fileStructure.path; // Default to file level
+
+          if (reference.referencedBy && reference.referencedBy !== 'global') {
+            const funcId = `${fileStructure.path}#${reference.referencedBy}`;
+            if (codeGraph.nodes.some(node => node.id === funcId)) {
+              referencingNodeId = funcId;
+            }
+          }
+
+          // Add the reference edge
+          addEdge({
+            source: referencingNodeId,
+            target: variableNode.id,
+            type: 'references',
+            referenceType: reference.referenceType,
+            line: reference.line,
+            column: reference.column
+          });
+        }
+      }
+
       // Analyze method calls
       for (const call of fileStructure.methodCalls) {
         // Find the containing function
         let sourceNodeId = fileStructure.path; // Default to file level
-        
+
         if (call.containingFunction) {
           sourceNodeId = `${fileStructure.path}#${call.containingFunction}`;
         }
-        
+
         // Try to find the target function or method
         let targetNodeId = null;
-        
+
         if (call.objectName) {
           // It's a method call on an object
           // First, check if it's a method call on a class instance
           const classNodes = codeGraph.nodes.filter(node => node.type === 'class');
-          
+
           for (const classNode of classNodes) {
             if (classNode.methods && classNode.methods.includes(call.name)) {
               // Found a class with this method
@@ -207,25 +239,25 @@ function buildCodeGraph(selectedFiles) {
               break;
             }
           }
-          
+
           // If not found as a class method, check if it's a call on an imported module
           if (!targetNodeId) {
-            const importedModules = fileStructure.imports.filter(imp => 
+            const importedModules = fileStructure.imports.filter(imp =>
               imp.name === call.objectName
             );
-            
+
             if (importedModules.length > 0) {
               const importedModule = importedModules[0];
               const resolvedPath = resolveImportPath(file.path, importedModule.path);
-              
+
               if (resolvedPath) {
                 // Look for the function in the imported module
-                const targetFunc = codeGraph.nodes.find(node => 
-                  node.path === resolvedPath && 
-                  node.type === 'function' && 
+                const targetFunc = codeGraph.nodes.find(node =>
+                  node.path === resolvedPath &&
+                  node.type === 'function' &&
                   node.label === call.name
                 );
-                
+
                 if (targetFunc) {
                   targetNodeId = targetFunc.id;
                 }
@@ -235,26 +267,26 @@ function buildCodeGraph(selectedFiles) {
         } else {
           // It's a direct function call
           // First, check if it's a call to a function in the same file
-          const sameFileFunc = codeGraph.nodes.find(node => 
-            node.path === fileStructure.path && 
-            node.type === 'function' && 
+          const sameFileFunc = codeGraph.nodes.find(node =>
+            node.path === fileStructure.path &&
+            node.type === 'function' &&
             node.label === call.name
           );
-          
+
           if (sameFileFunc) {
             targetNodeId = sameFileFunc.id;
           } else {
             // Check if it's a call to an imported function
-            const importedFuncs = codeGraph.nodes.filter(node => 
-              node.type === 'function' && 
+            const importedFuncs = codeGraph.nodes.filter(node =>
+              node.type === 'function' &&
               node.label === call.name
             );
-            
+
             if (importedFuncs.length > 0) {
               // Check if the file imports the module containing this function
               for (const func of importedFuncs) {
                 const funcFilePath = func.path;
-                
+
                 if (fileStructure.imports.some(imp => {
                   const resolvedPath = resolveImportPath(file.path, imp.path);
                   return resolvedPath === funcFilePath;
@@ -266,7 +298,7 @@ function buildCodeGraph(selectedFiles) {
             }
           }
         }
-        
+
         // Add the edge if we found a target
         if (targetNodeId) {
           addEdge({
@@ -281,7 +313,7 @@ function buildCodeGraph(selectedFiles) {
       }
     }
   }
-  
+
   return codeGraph;
 }
 
@@ -297,7 +329,7 @@ function findClassByName(className, selectedFiles) {
       return node.id;
     }
   }
-  
+
   return null;
 }
 
@@ -320,7 +352,7 @@ function addEdge(edge) {
   // Generate a unique ID for the edge
   const edgeId = `${edge.source}=>${edge.target}:${edge.type}`;
   edge.id = edgeId;
-  
+
   // Check if edge already exists
   if (!codeGraph.edges.some(e => e.id === edgeId)) {
     codeGraph.edges.push(edge);
@@ -339,17 +371,17 @@ function resolveImportPath(sourcePath, importPath) {
     if (importPath.startsWith('./') || importPath.startsWith('../')) {
       const sourceDir = path.dirname(sourcePath);
       let resolvedPath = path.resolve(sourceDir, importPath);
-      
+
       // Check if the path exists as is
       if (fs.existsSync(resolvedPath)) {
         return resolvedPath;
       }
-      
+
       // Try adding .js extension
       if (fs.existsSync(resolvedPath + '.js')) {
         return resolvedPath + '.js';
       }
-      
+
       // Try adding /index.js
       if (fs.existsSync(path.join(resolvedPath, 'index.js'))) {
         return path.join(resolvedPath, 'index.js');
@@ -358,17 +390,17 @@ function resolveImportPath(sourcePath, importPath) {
       // Handle non-relative paths (node_modules, etc.)
       // This is a simplification - in a real implementation, we would need
       // to resolve node_modules paths properly
-      
+
       // For now, just check if any of the parsed files match the import name
       const fileName = path.basename(importPath);
-      
+
       for (const node of codeGraph.nodes) {
         if (node.type === 'file' && path.basename(node.path) === fileName) {
           return node.path;
         }
       }
     }
-    
+
     return null;
   } catch (error) {
     console.error(`Error resolving import path ${importPath} from ${sourcePath}:`, error.message);
@@ -387,42 +419,42 @@ function getSubgraph(nodeId, depth = 1) {
     nodes: [],
     edges: []
   };
-  
+
   // Find the center node
   const centerNode = codeGraph.nodes.find(node => node.id === nodeId);
   if (!centerNode) {
     return subgraph;
   }
-  
+
   // Add the center node
   subgraph.nodes.push(centerNode);
-  
+
   // Traverse the graph to the specified depth
   const visited = new Set([nodeId]);
   const queue = [{ id: nodeId, depth: 0 }];
-  
+
   while (queue.length > 0) {
     const { id, depth: currentDepth } = queue.shift();
-    
+
     if (currentDepth >= depth) {
       continue;
     }
-    
+
     // Find all edges connected to this node
-    const connectedEdges = codeGraph.edges.filter(edge => 
+    const connectedEdges = codeGraph.edges.filter(edge =>
       edge.source === id || edge.target === id
     );
-    
+
     for (const edge of connectedEdges) {
       // Add the edge to the subgraph
       subgraph.edges.push(edge);
-      
+
       // Add the connected node if not visited
       const connectedId = edge.source === id ? edge.target : edge.source;
-      
+
       if (!visited.has(connectedId)) {
         visited.add(connectedId);
-        
+
         const connectedNode = codeGraph.nodes.find(node => node.id === connectedId);
         if (connectedNode) {
           subgraph.nodes.push(connectedNode);
@@ -431,7 +463,7 @@ function getSubgraph(nodeId, depth = 1) {
       }
     }
   }
-  
+
   return subgraph;
 }
 
