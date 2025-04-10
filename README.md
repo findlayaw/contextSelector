@@ -386,6 +386,14 @@ Code Maps mode (enabled with `--codemaps`) provides a token-efficient structural
 - **Object Method Detection**: Identifies methods defined in object literals
 - **Export Detection**: Shows which functions and classes are exported
 
+#### React/JSX/TSX Support
+
+- **Component Detection**: Identifies React components (functional, class, pure, memo, forwardRef)
+- **Props Type Tracking**: Links components to their props interface/type definitions
+- **Hook Detection**: Identifies custom React hooks (functions starting with "use")
+- **Component Relationships**: Shows which components use which props types
+- **Export Status**: Shows which components are exported/public
+
 ````markdown
 # Project Directory Structure
 
@@ -458,6 +466,31 @@ This section provides a structural overview of the codebase, focusing on API-lev
 **Public API:**
 - **Exported Interfaces:** `FormatOptions`
 - **Exported Enums:** `OutputFormat`
+
+### src/components/Button.tsx
+
+**Language:** typescript
+
+**Imports:**
+- From `react`: React, { FC, ButtonHTMLAttributes }
+- From `../styles/button.module.css`: styles
+
+**Interfaces:**
+- `ButtonProps` (exported)
+
+**React Components:**
+- `Button` (function) (exported) - Props: `ButtonProps`
+
+**React Hooks:**
+- `useButtonState` (exported)
+
+**Type References:**
+- From `react`: `FC`, `ButtonHTMLAttributes`
+
+**Public API:**
+- **Exported Components:** `Button`
+- **Exported Hooks:** `useButtonState`
+- **Exported Interfaces:** `ButtonProps`
 
 ## File Relationships
 

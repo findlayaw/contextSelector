@@ -115,6 +115,9 @@ function extractJavaScriptStructure(content, fileStructure) {
   // Extract enum definitions (TypeScript)
   extractJSEnums(content, fileStructure);
 
+  // Extract React components (JSX/TSX)
+  extractReactComponents(content, fileStructure);
+
   // Extract type references
   extractJSTypeReferences(content, fileStructure);
 
@@ -500,6 +503,166 @@ function extractJSInterfaces(content, fileStructure) {
         type: 'interface',
         name: interfaceName,
         extends: extendsInterfaces
+      });
+    }
+  }
+}
+
+/**
+ * Extract React components from JSX/TSX files
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractReactComponents(content, fileStructure) {
+  // Check if the file imports React
+  const hasReactImport = /import\s+(?:\*\s+as\s+)?React|import\s+{[^}]*React[^}]*}\s+from\s+['"]react['"]|require\(['"]react['"]\)/.test(content);
+
+  if (!hasReactImport) {
+    // Not a React component file
+    return;
+  }
+
+  // Track components found in this file
+  const components = [];
+
+  // 1. Functional components (arrow functions)
+  const arrowComponentPattern = /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\(\s*(?:props|\{[^}]*\})\s*\)|props|\{[^}]*\})\s*=>\s*(?:\(|{|<)/g;
+  let match;
+
+  while ((match = arrowComponentPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    // Check if it returns JSX (contains a tag)
+    const componentBody = content.substring(match.index, match.index + 500); // Look at a reasonable chunk
+    if (/<[A-Z][\w.]*[\s>]/.test(componentBody)) {
+      components.push({
+        type: 'functional_component',
+        name: componentName,
+        isExported: isExported,
+        style: 'arrow'
+      });
+    }
+  }
+
+  // 2. Functional components (function declarations)
+  const funcComponentPattern = /(?:export\s+)?function\s+(\w+)\s*\(\s*(?:props|\{[^}]*\})\s*\)/g;
+
+  while ((match = funcComponentPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    // Check if it returns JSX
+    const componentBody = content.substring(match.index, match.index + 500);
+    if (/<[A-Z][\w.]*[\s>]/.test(componentBody)) {
+      components.push({
+        type: 'functional_component',
+        name: componentName,
+        isExported: isExported,
+        style: 'function'
+      });
+    }
+  }
+
+  // 3. Class components
+  const classComponentPattern = /(?:export\s+)?class\s+(\w+)\s+extends\s+(?:React\.)?Component/g;
+
+  while ((match = classComponentPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    components.push({
+      type: 'class_component',
+      name: componentName,
+      isExported: isExported
+    });
+  }
+
+  // 4. Pure components
+  const pureComponentPattern = /(?:export\s+)?class\s+(\w+)\s+extends\s+(?:React\.)?PureComponent/g;
+
+  while ((match = pureComponentPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    components.push({
+      type: 'pure_component',
+      name: componentName,
+      isExported: isExported
+    });
+  }
+
+  // 5. Memo components
+  const memoComponentPattern = /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*React\.memo\(/g;
+
+  while ((match = memoComponentPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    components.push({
+      type: 'memo_component',
+      name: componentName,
+      isExported: isExported
+    });
+  }
+
+  // 6. Forward ref components
+  const forwardRefPattern = /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*React\.forwardRef\(/g;
+
+  while ((match = forwardRefPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    const isExported = match[0].includes('export');
+
+    components.push({
+      type: 'forwardref_component',
+      name: componentName,
+      isExported: isExported
+    });
+  }
+
+  // Extract props interfaces/types for components
+  for (const component of components) {
+    // Look for Props type definition
+    const propsTypePattern = new RegExp(`(?:interface|type)\\s+(${component.name}Props|${component.name}Properties)\\s*(?:<[^>]*>)?\\s*(?:=\\s*)?{`, 'g');
+    let propsMatch;
+
+    while ((propsMatch = propsTypePattern.exec(content)) !== null) {
+      component.propsType = propsMatch[1];
+    }
+
+    // Add component to definitions
+    fileStructure.definitions.push(component);
+
+    // Add to public API if exported
+    if (component.isExported) {
+      fileStructure.publicAPI.push({
+        type: 'component',
+        name: component.name,
+        componentType: component.type
+      });
+    }
+  }
+
+  // Extract custom hooks
+  const hookPattern = /(?:export\s+)?(?:function|const|let|var)\s+(use[A-Z]\w*)\s*(?:\(|=)/g;
+
+  while ((match = hookPattern.exec(content)) !== null) {
+    const hookName = match[1];
+    const isExported = match[0].includes('export');
+
+    const hook = {
+      type: 'hook',
+      name: hookName,
+      isExported: isExported
+    };
+
+    fileStructure.definitions.push(hook);
+
+    // Add to public API if exported
+    if (isExported) {
+      fileStructure.publicAPI.push({
+        type: 'hook',
+        name: hookName
       });
     }
   }

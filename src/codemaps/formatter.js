@@ -78,7 +78,7 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       result += '**Definitions:**\n\n';
 
       // Group definitions by type
-      const definitionsByType = {};
+      var definitionsByType = {}; // Use var instead of const to avoid scope issues
 
       for (const def of file.definitions) {
         if (!definitionsByType[def.type]) {
@@ -329,6 +329,141 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
             }
           }
         }
+      }
+
+      result += '\n';
+    }
+
+    // Add React components
+    const componentTypes = [
+      'functional_component',
+      'class_component',
+      'pure_component',
+      'memo_component',
+      'forwardref_component'
+    ];
+
+    // Check if definitionsByType is defined
+    if (typeof definitionsByType === 'undefined') {
+      // Re-initialize definitionsByType if it's out of scope
+      var definitionsByType = {};
+
+      if (file.definitions) {
+        for (const def of file.definitions) {
+          if (!definitionsByType[def.type]) {
+            definitionsByType[def.type] = [];
+          }
+          definitionsByType[def.type].push(def);
+        }
+      }
+    }
+
+    // Use var instead of const to avoid scope issues
+    var hasComponents = definitionsByType && componentTypes.some(type => definitionsByType[type] && definitionsByType[type].length > 0);
+
+    if (hasComponents) {
+      result += '**React Components:**\n\n';
+
+      // Functional components
+      if (definitionsByType.functional_component) {
+        for (const comp of definitionsByType.functional_component) {
+          result += `- \`${comp.name}\` (${comp.style === 'arrow' ? 'arrow function' : 'function'})`;
+
+          if (comp.isExported) {
+            result += ' (exported)';
+          }
+
+          if (comp.propsType) {
+            result += ` - Props: \`${comp.propsType}\``;
+          }
+
+          result += '\n';
+        }
+      }
+
+      // Class components
+      if (definitionsByType.class_component) {
+        for (const comp of definitionsByType.class_component) {
+          result += `- \`${comp.name}\` (class component)`;
+
+          if (comp.isExported) {
+            result += ' (exported)';
+          }
+
+          if (comp.propsType) {
+            result += ` - Props: \`${comp.propsType}\``;
+          }
+
+          result += '\n';
+        }
+      }
+
+      // Pure components
+      if (definitionsByType.pure_component) {
+        for (const comp of definitionsByType.pure_component) {
+          result += `- \`${comp.name}\` (pure component)`;
+
+          if (comp.isExported) {
+            result += ' (exported)';
+          }
+
+          if (comp.propsType) {
+            result += ` - Props: \`${comp.propsType}\``;
+          }
+
+          result += '\n';
+        }
+      }
+
+      // Memo components
+      if (definitionsByType.memo_component) {
+        for (const comp of definitionsByType.memo_component) {
+          result += `- \`${comp.name}\` (memo)`;
+
+          if (comp.isExported) {
+            result += ' (exported)';
+          }
+
+          if (comp.propsType) {
+            result += ` - Props: \`${comp.propsType}\``;
+          }
+
+          result += '\n';
+        }
+      }
+
+      // ForwardRef components
+      if (definitionsByType.forwardref_component) {
+        for (const comp of definitionsByType.forwardref_component) {
+          result += `- \`${comp.name}\` (forwardRef)`;
+
+          if (comp.isExported) {
+            result += ' (exported)';
+          }
+
+          if (comp.propsType) {
+            result += ` - Props: \`${comp.propsType}\``;
+          }
+
+          result += '\n';
+        }
+      }
+
+      result += '\n';
+    }
+
+    // Add React hooks
+    if (definitionsByType && definitionsByType.hook) {
+      result += '**React Hooks:**\n\n';
+
+      for (const hook of definitionsByType.hook) {
+        result += `- \`${hook.name}\``;
+
+        if (hook.isExported) {
+          result += ' (exported)';
+        }
+
+        result += '\n';
       }
 
       result += '\n';

@@ -120,6 +120,164 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       result += '        </enums>\n';
     }
 
+    // Add React components
+    const componentTypes = [
+      'functional_component',
+      'class_component',
+      'pure_component',
+      'memo_component',
+      'forwardref_component'
+    ];
+
+    // Check if file has any React components
+    let hasComponents = false;
+    if (!file.definitions) {
+      // Create an empty definitions array to prevent errors
+      file.definitions = [];
+    }
+
+    for (const type of componentTypes) {
+      if (file.definitions.some(def => def.type === type)) {
+        hasComponents = true;
+        break;
+      }
+    }
+
+    if (hasComponents) {
+      result += '        <react_components>\n';
+
+      // Group components by type
+      const componentsByType = {};
+      for (const def of file.definitions) {
+        if (componentTypes.includes(def.type)) {
+          if (!componentsByType[def.type]) {
+            componentsByType[def.type] = [];
+          }
+          componentsByType[def.type].push(def);
+        }
+      }
+
+      // Functional components
+      if (componentsByType.functional_component) {
+        result += '          <functional_components>\n';
+        for (const comp of componentsByType.functional_component) {
+          result += '            <component>\n';
+          result += `              <name>${escapeXml(comp.name)}</name>\n`;
+          result += `              <style>${escapeXml(comp.style || 'function')}</style>\n`;
+
+          if (comp.isExported) {
+            result += '              <is_exported>true</is_exported>\n';
+          }
+
+          if (comp.propsType) {
+            result += `              <props_type>${escapeXml(comp.propsType)}</props_type>\n`;
+          }
+
+          result += '            </component>\n';
+        }
+        result += '          </functional_components>\n';
+      }
+
+      // Class components
+      if (componentsByType.class_component) {
+        result += '          <class_components>\n';
+        for (const comp of componentsByType.class_component) {
+          result += '            <component>\n';
+          result += `              <name>${escapeXml(comp.name)}</name>\n`;
+
+          if (comp.isExported) {
+            result += '              <is_exported>true</is_exported>\n';
+          }
+
+          if (comp.propsType) {
+            result += `              <props_type>${escapeXml(comp.propsType)}</props_type>\n`;
+          }
+
+          result += '            </component>\n';
+        }
+        result += '          </class_components>\n';
+      }
+
+      // Pure components
+      if (componentsByType.pure_component) {
+        result += '          <pure_components>\n';
+        for (const comp of componentsByType.pure_component) {
+          result += '            <component>\n';
+          result += `              <name>${escapeXml(comp.name)}</name>\n`;
+
+          if (comp.isExported) {
+            result += '              <is_exported>true</is_exported>\n';
+          }
+
+          if (comp.propsType) {
+            result += `              <props_type>${escapeXml(comp.propsType)}</props_type>\n`;
+          }
+
+          result += '            </component>\n';
+        }
+        result += '          </pure_components>\n';
+      }
+
+      // Memo components
+      if (componentsByType.memo_component) {
+        result += '          <memo_components>\n';
+        for (const comp of componentsByType.memo_component) {
+          result += '            <component>\n';
+          result += `              <name>${escapeXml(comp.name)}</name>\n`;
+
+          if (comp.isExported) {
+            result += '              <is_exported>true</is_exported>\n';
+          }
+
+          if (comp.propsType) {
+            result += `              <props_type>${escapeXml(comp.propsType)}</props_type>\n`;
+          }
+
+          result += '            </component>\n';
+        }
+        result += '          </memo_components>\n';
+      }
+
+      // ForwardRef components
+      if (componentsByType.forwardref_component) {
+        result += '          <forwardref_components>\n';
+        for (const comp of componentsByType.forwardref_component) {
+          result += '            <component>\n';
+          result += `              <name>${escapeXml(comp.name)}</name>\n`;
+
+          if (comp.isExported) {
+            result += '              <is_exported>true</is_exported>\n';
+          }
+
+          if (comp.propsType) {
+            result += `              <props_type>${escapeXml(comp.propsType)}</props_type>\n`;
+          }
+
+          result += '            </component>\n';
+        }
+        result += '          </forwardref_components>\n';
+      }
+
+      result += '        </react_components>\n';
+    }
+
+    // Add React hooks
+    const hooks = file.definitions ? file.definitions.filter(def => def.type === 'hook') : [];
+    if (hooks.length > 0) {
+      result += '        <react_hooks>\n';
+      for (const hook of hooks) {
+        result += '          <hook>\n';
+        result += `            <name>${escapeXml(hook.name)}</name>\n`;
+
+        if (hook.isExported) {
+          result += '            <is_exported>true</is_exported>\n';
+        }
+
+        result += '          </hook>\n';
+      }
+      result += '        </react_hooks>\n';
+    }
+
     // Add type references
     if (file.typeReferences && file.typeReferences.length > 0) {
       result += '        <type_references>\n';
