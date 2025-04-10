@@ -14,17 +14,20 @@ function parseFile(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     const extension = path.extname(filePath).toLowerCase();
     const language = getLanguageFromExtension(extension);
-    
-    // Basic structure for all files
+
+    // Enhanced structure for all files
     const fileStructure = {
       path: filePath,
       type: 'file',
       language: language,
       definitions: [],
       imports: [],
-      exports: []
+      exports: [],
+      typeReferences: [],  // Track references to types from other files
+      publicAPI: [],      // Track public API surface
+      enums: []           // Track enums
     };
-    
+
     // Process based on language
     switch (language) {
       case 'javascript':
@@ -42,7 +45,7 @@ function parseFile(filePath) {
         break;
       // Add more languages as needed
     }
-    
+
     return fileStructure;
   } catch (error) {
     console.error(`Error parsing file ${filePath}:`, error.message);
@@ -84,7 +87,7 @@ function getLanguageFromExtension(extension) {
     '.hpp': 'cpp',
     '.dart': 'dart'
   };
-  
+
   return extensionMap[extension] || 'unknown';
 }
 
@@ -96,16 +99,25 @@ function getLanguageFromExtension(extension) {
 function extractJavaScriptStructure(content, fileStructure) {
   // Extract imports
   extractJSImports(content, fileStructure);
-  
+
   // Extract class definitions
   extractJSClasses(content, fileStructure);
-  
+
   // Extract function definitions
   extractJSFunctions(content, fileStructure);
-  
+
   // Extract interface definitions (TypeScript)
   extractJSInterfaces(content, fileStructure);
-  
+
+  // Extract enum definitions (TypeScript)
+  extractJSEnums(content, fileStructure);
+
+  // Extract type references
+  extractJSTypeReferences(content, fileStructure);
+
+  // Extract public API surface
+  extractJSPublicAPI(content, fileStructure);
+
   // Extract exports
   extractJSExports(content, fileStructure);
 }
@@ -119,7 +131,7 @@ function extractJSImports(content, fileStructure) {
   // Match ES6 imports
   const importPattern = /import\s+(?:{([^}]+)}\s+from\s+['"]([^'"]+)['"]|([^;]+)\s+from\s+['"]([^'"]+)['"])/g;
   let match;
-  
+
   while ((match = importPattern.exec(content)) !== null) {
     if (match[1]) {
       // Named imports: import { a, b } from 'module'
@@ -138,10 +150,10 @@ function extractJSImports(content, fileStructure) {
       });
     }
   }
-  
+
   // Match CommonJS requires
   const requirePattern = /(?:const|let|var)\s+(?:{([^}]+)}\s*=\s*require\(['"]([^'"]+)['"]\)|([^=]+)\s*=\s*require\(['"]([^'"]+)['"]\))/g;
-  
+
   while ((match = requirePattern.exec(content)) !== null) {
     if (match[1] && match[2]) {
       // Destructured require: const { a, b } = require('module')
@@ -171,16 +183,16 @@ function extractJSClasses(content, fileStructure) {
   // Match class declarations
   const classPattern = /class\s+(\w+)(?:\s+extends\s+(\w+))?\s*{/g;
   let match;
-  
+
   while ((match = classPattern.exec(content)) !== null) {
     const className = match[1];
     const extendsClass = match[2] || null;
-    
+
     // Find methods within the class
     const classStart = match.index;
     const classBody = findClassBody(content, classStart);
     const methods = extractJSMethods(classBody, className);
-    
+
     fileStructure.definitions.push({
       type: 'class',
       name: className,
@@ -199,10 +211,10 @@ function extractJSClasses(content, fileStructure) {
 function findClassBody(content, startIndex) {
   const openBraceIndex = content.indexOf('{', startIndex);
   if (openBraceIndex === -1) return '';
-  
+
   let braceCount = 1;
   let currentIndex = openBraceIndex + 1;
-  
+
   while (braceCount > 0 && currentIndex < content.length) {
     const char = content[currentIndex];
     if (char === '{') {
@@ -212,7 +224,7 @@ function findClassBody(content, startIndex) {
     }
     currentIndex++;
   }
-  
+
   return content.substring(openBraceIndex + 1, currentIndex - 1);
 }
 
@@ -224,15 +236,15 @@ function findClassBody(content, startIndex) {
  */
 function extractJSMethods(classBody, className) {
   const methods = [];
-  
+
   // Match method declarations
   const methodPattern = /(?:async\s+)?(?:static\s+)?(?:get|set|)\s*(\w+)\s*\(([^)]*)\)/g;
   let match;
-  
+
   while ((match = methodPattern.exec(classBody)) !== null) {
     const methodName = match[1];
     const params = match[2].split(',').map(p => p.trim()).filter(p => p);
-    
+
     methods.push({
       type: 'method',
       name: methodName,
@@ -240,7 +252,7 @@ function extractJSMethods(classBody, className) {
       className: className
     });
   }
-  
+
   return methods;
 }
 
@@ -253,12 +265,12 @@ function extractJSFunctions(content, fileStructure) {
   // Match function declarations
   const functionPattern = /(?:export\s+)?(?:async\s+)?function\s*(\*?)\s*(\w+)\s*\(([^)]*)\)/g;
   let match;
-  
+
   while ((match = functionPattern.exec(content)) !== null) {
     const isGenerator = match[1] === '*';
     const funcName = match[2];
     const params = match[3].split(',').map(p => p.trim()).filter(p => p);
-    
+
     fileStructure.definitions.push({
       type: 'function',
       name: funcName,
@@ -266,14 +278,14 @@ function extractJSFunctions(content, fileStructure) {
       params: params
     });
   }
-  
+
   // Match arrow functions assigned to variables
   const arrowFuncPattern = /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>/g;
-  
+
   while ((match = arrowFuncPattern.exec(content)) !== null) {
     const funcName = match[1];
     const params = match[2].split(',').map(p => p.trim()).filter(p => p);
-    
+
     fileStructure.definitions.push({
       type: 'arrow_function',
       name: funcName,
@@ -289,18 +301,219 @@ function extractJSFunctions(content, fileStructure) {
  */
 function extractJSInterfaces(content, fileStructure) {
   // Match interface declarations (TypeScript only)
-  const interfacePattern = /interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{/g;
+  const interfacePattern = /(?:export\s+)?(?:declare\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{/g;
   let match;
-  
+
   while ((match = interfacePattern.exec(content)) !== null) {
     const interfaceName = match[1];
     const extendsInterfaces = match[2] ? match[2].split(',').map(i => i.trim()) : [];
-    
-    fileStructure.definitions.push({
+    const isExported = match[0].includes('export');
+
+    const interfaceDef = {
       type: 'interface',
       name: interfaceName,
-      extends: extendsInterfaces
+      extends: extendsInterfaces,
+      isExported: isExported
+    };
+
+    fileStructure.definitions.push(interfaceDef);
+
+    // Add to public API if exported
+    if (isExported) {
+      fileStructure.publicAPI.push({
+        type: 'interface',
+        name: interfaceName,
+        extends: extendsInterfaces
+      });
+    }
+  }
+}
+
+/**
+ * Extract enum definitions from TypeScript
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractJSEnums(content, fileStructure) {
+  // Match enum declarations (TypeScript only)
+  const enumPattern = /(?:export\s+)?(?:const\s+)?enum\s+(\w+)\s*{([^}]*)}/g;
+  let match;
+
+  while ((match = enumPattern.exec(content)) !== null) {
+    const enumName = match[1];
+    const enumBody = match[2];
+    const isExported = match[0].includes('export');
+    const isConst = match[0].includes('const enum');
+
+    // Extract enum members
+    const memberPattern = /(\w+)(?:\s*=\s*([^,]+))?/g;
+    const members = [];
+    let memberMatch;
+
+    while ((memberMatch = memberPattern.exec(enumBody)) !== null) {
+      members.push({
+        name: memberMatch[1],
+        value: memberMatch[2] ? memberMatch[2].trim() : undefined
+      });
+    }
+
+    const enumDef = {
+      type: 'enum',
+      name: enumName,
+      members: members,
+      isConst: isConst,
+      isExported: isExported
+    };
+
+    fileStructure.enums.push(enumDef);
+
+    // Add to public API if exported
+    if (isExported) {
+      fileStructure.publicAPI.push({
+        type: 'enum',
+        name: enumName,
+        members: members.map(m => m.name)
+      });
+    }
+  }
+}
+
+/**
+ * Extract type references from JavaScript/TypeScript
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractJSTypeReferences(content, fileStructure) {
+  // Match type annotations in variable declarations, function parameters, and return types
+  const typeRefPatterns = [
+    // Variable and parameter type annotations
+    /:\s*([A-Z]\w*(?:\.[A-Z]\w*)?(?:<[^>]+>)?)/g,
+    // Generic type parameters
+    /<([A-Z]\w*(?:\.[A-Z]\w*)?(?:<[^>]+>)?)>/g,
+    // extends clause in interfaces and classes
+    /extends\s+([A-Z]\w*(?:\.[A-Z]\w*)?(?:<[^>]+>)?)/g,
+    // implements clause in classes
+    /implements\s+([A-Z]\w*(?:\.[A-Z]\w*)?(?:<[^>]+>)?)/g,
+    // Type assertions
+    /as\s+([A-Z]\w*(?:\.[A-Z]\w*)?(?:<[^>]+>)?)/g,
+    // instanceof checks
+    /instanceof\s+([A-Z]\w*(?:\.[A-Z]\w*)?)/g
+  ];
+
+  // Track unique type references
+  const typeRefs = new Set();
+
+  // Process each pattern
+  for (const pattern of typeRefPatterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const typeName = match[1].trim();
+
+      // Skip primitive types and common built-ins
+      if (!isPrimitiveOrBuiltIn(typeName)) {
+        typeRefs.add(typeName);
+      }
+    }
+  }
+
+  // Add unique type references to the file structure
+  for (const typeName of typeRefs) {
+    fileStructure.typeReferences.push({
+      name: typeName,
+      // Extract the source module if it's a qualified name (e.g., Module.Type)
+      module: typeName.includes('.') ? typeName.split('.')[0] : null
     });
+  }
+}
+
+/**
+ * Check if a type name is a primitive or built-in type
+ * @param {string} typeName - Name of the type
+ * @returns {boolean} - Whether it's a primitive or built-in type
+ */
+function isPrimitiveOrBuiltIn(typeName) {
+  const primitives = [
+    'string', 'number', 'boolean', 'any', 'void', 'null', 'undefined',
+    'never', 'unknown', 'object', 'symbol', 'bigint', 'Function',
+    'Object', 'Array', 'Map', 'Set', 'Promise', 'Date', 'RegExp',
+    'Error', 'String', 'Number', 'Boolean'
+  ];
+
+  return primitives.includes(typeName) ||
+         typeName.startsWith('Array<') ||
+         typeName.startsWith('Promise<') ||
+         typeName.startsWith('Map<') ||
+         typeName.startsWith('Set<');
+}
+
+/**
+ * Extract public API surface from JavaScript/TypeScript
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractJSPublicAPI(content, fileStructure) {
+  // Classes, functions, and variables with export keyword are already handled in their respective extractors
+
+  // Extract exported type aliases
+  const typeAliasPattern = /export\s+type\s+(\w+)(?:<[^>]+>)?\s*=\s*([^;]+);/g;
+  let match;
+
+  while ((match = typeAliasPattern.exec(content)) !== null) {
+    const typeName = match[1];
+    const typeValue = match[2].trim();
+
+    fileStructure.publicAPI.push({
+      type: 'type_alias',
+      name: typeName,
+      value: typeValue
+    });
+  }
+
+  // Extract public class members (properties and methods)
+  for (const def of fileStructure.definitions) {
+    if (def.type === 'class') {
+      // Find the class in the content
+      const classStart = content.indexOf(`class ${def.name}`);
+      if (classStart !== -1) {
+        const classBody = findClassBody(content, classStart);
+
+        // Extract public properties
+        const publicPropPattern = /public\s+(\w+)(?:\s*:\s*([^;=]+))?(?:\s*=\s*([^;]+))?;/g;
+        let propMatch;
+
+        while ((propMatch = publicPropPattern.exec(classBody)) !== null) {
+          const propName = propMatch[1];
+          const propType = propMatch[2] ? propMatch[2].trim() : null;
+
+          fileStructure.publicAPI.push({
+            type: 'property',
+            name: propName,
+            dataType: propType,
+            className: def.name
+          });
+        }
+
+        // Public methods are already captured in the class definition
+        if (def.methods) {
+          for (const method of def.methods) {
+            // In TypeScript, methods are public by default unless marked private or protected
+            const methodText = classBody.substring(
+              classBody.indexOf(method.name),
+              classBody.indexOf(method.name) + 100 // Look at a reasonable chunk of text
+            );
+
+            if (!methodText.includes('private') && !methodText.includes('protected')) {
+              fileStructure.publicAPI.push({
+                type: 'method',
+                name: method.name,
+                params: method.params,
+                className: def.name
+              });
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -313,33 +526,33 @@ function extractJSExports(content, fileStructure) {
   // Match named exports
   const namedExportPattern = /export\s+(?:const|let|var|function|class|interface)\s+(\w+)/g;
   let match;
-  
+
   while ((match = namedExportPattern.exec(content)) !== null) {
     fileStructure.exports.push({
       type: 'named',
       name: match[1]
     });
   }
-  
+
   // Match default exports
   const defaultExportPattern = /export\s+default\s+(?:class|function)?\s*(\w+)?/g;
-  
+
   while ((match = defaultExportPattern.exec(content)) !== null) {
     fileStructure.exports.push({
       type: 'default',
       name: match[1] || 'anonymous'
     });
   }
-  
+
   // Match module.exports
   const moduleExportsPattern = /module\.exports\s*=\s*{([^}]+)}/g;
-  
+
   while ((match = moduleExportsPattern.exec(content)) !== null) {
     const exportedItems = match[1].split(',').map(item => {
       const parts = item.split(':').map(part => part.trim());
       return parts.length > 1 ? parts[1] : parts[0];
     });
-    
+
     for (const item of exportedItems) {
       fileStructure.exports.push({
         type: 'commonjs',
@@ -356,17 +569,17 @@ function extractJSExports(content, fileStructure) {
  */
 function extractPythonStructure(content, fileStructure) {
   // Basic implementation for Python - can be expanded
-  
+
   // Extract imports
   const importPattern = /(?:from\s+(\S+)\s+import\s+([^#\n]+)|import\s+([^#\n]+))/g;
   let match;
-  
+
   while ((match = importPattern.exec(content)) !== null) {
     if (match[1] && match[2]) {
       // from module import items
       const module = match[1];
       const items = match[2].split(',').map(item => item.trim());
-      
+
       fileStructure.imports.push({
         type: 'from',
         module: module,
@@ -375,7 +588,7 @@ function extractPythonStructure(content, fileStructure) {
     } else if (match[3]) {
       // import module
       const modules = match[3].split(',').map(mod => mod.trim());
-      
+
       for (const module of modules) {
         fileStructure.imports.push({
           type: 'import',
@@ -384,28 +597,28 @@ function extractPythonStructure(content, fileStructure) {
       }
     }
   }
-  
+
   // Extract class definitions
   const classPattern = /class\s+(\w+)(?:\(([^)]+)\))?:/g;
-  
+
   while ((match = classPattern.exec(content)) !== null) {
     const className = match[1];
     const inherits = match[2] ? match[2].split(',').map(cls => cls.trim()) : [];
-    
+
     fileStructure.definitions.push({
       type: 'class',
       name: className,
       inherits: inherits
     });
   }
-  
+
   // Extract function definitions
   const functionPattern = /def\s+(\w+)\s*\(([^)]*)\):/g;
-  
+
   while ((match = functionPattern.exec(content)) !== null) {
     const funcName = match[1];
     const params = match[2].split(',').map(p => p.trim()).filter(p => p);
-    
+
     fileStructure.definitions.push({
       type: 'function',
       name: funcName,
@@ -421,34 +634,34 @@ function extractPythonStructure(content, fileStructure) {
  */
 function extractJavaStructure(content, fileStructure) {
   // Basic implementation for Java - can be expanded
-  
+
   // Extract package
   const packagePattern = /package\s+([^;]+);/;
   const packageMatch = packagePattern.exec(content);
-  
+
   if (packageMatch) {
     fileStructure.package = packageMatch[1].trim();
   }
-  
+
   // Extract imports
   const importPattern = /import\s+([^;]+);/g;
   let match;
-  
+
   while ((match = importPattern.exec(content)) !== null) {
     fileStructure.imports.push({
       type: 'import',
       path: match[1].trim()
     });
   }
-  
+
   // Extract class definitions
   const classPattern = /(?:public|private|protected)?\s*(?:abstract|final)?\s*class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?/g;
-  
+
   while ((match = classPattern.exec(content)) !== null) {
     const className = match[1];
     const extendsClass = match[2] || null;
     const implementsInterfaces = match[3] ? match[3].split(',').map(i => i.trim()) : [];
-    
+
     fileStructure.definitions.push({
       type: 'class',
       name: className,
@@ -456,29 +669,29 @@ function extractJavaStructure(content, fileStructure) {
       implements: implementsInterfaces
     });
   }
-  
+
   // Extract interface definitions
   const interfacePattern = /(?:public|private|protected)?\s*interface\s+(\w+)(?:\s+extends\s+([^{]+))?/g;
-  
+
   while ((match = interfacePattern.exec(content)) !== null) {
     const interfaceName = match[1];
     const extendsInterfaces = match[2] ? match[2].split(',').map(i => i.trim()) : [];
-    
+
     fileStructure.definitions.push({
       type: 'interface',
       name: interfaceName,
       extends: extendsInterfaces
     });
   }
-  
+
   // Extract method definitions
   const methodPattern = /(?:public|private|protected|static|final|abstract|synchronized)\s+(?:<[^>]+>\s+)?(\w+(?:<[^>]+>)?)\s+(\w+)\s*\(([^)]*)\)/g;
-  
+
   while ((match = methodPattern.exec(content)) !== null) {
     const returnType = match[1];
     const methodName = match[2];
     const params = match[3].split(',').map(p => p.trim()).filter(p => p);
-    
+
     fileStructure.definitions.push({
       type: 'method',
       name: methodName,
@@ -495,62 +708,62 @@ function extractJavaStructure(content, fileStructure) {
  */
 function extractCSharpStructure(content, fileStructure) {
   // Basic implementation for C# - can be expanded
-  
+
   // Extract namespace
   const namespacePattern = /namespace\s+([^{;]+)/;
   const namespaceMatch = namespacePattern.exec(content);
-  
+
   if (namespaceMatch) {
     fileStructure.namespace = namespaceMatch[1].trim();
   }
-  
+
   // Extract using statements
   const usingPattern = /using\s+([^;]+);/g;
   let match;
-  
+
   while ((match = usingPattern.exec(content)) !== null) {
     fileStructure.imports.push({
       type: 'using',
       path: match[1].trim()
     });
   }
-  
+
   // Extract class definitions
   const classPattern = /(?:public|private|protected|internal)?\s*(?:abstract|sealed|static)?\s*class\s+(\w+)(?:\s*:\s*([^{]+))?/g;
-  
+
   while ((match = classPattern.exec(content)) !== null) {
     const className = match[1];
     const inheritance = match[2] ? match[2].split(',').map(i => i.trim()) : [];
-    
+
     fileStructure.definitions.push({
       type: 'class',
       name: className,
       inheritance: inheritance
     });
   }
-  
+
   // Extract interface definitions
   const interfacePattern = /(?:public|private|protected|internal)?\s*interface\s+(\w+)(?:\s*:\s*([^{]+))?/g;
-  
+
   while ((match = interfacePattern.exec(content)) !== null) {
     const interfaceName = match[1];
     const inheritance = match[2] ? match[2].split(',').map(i => i.trim()) : [];
-    
+
     fileStructure.definitions.push({
       type: 'interface',
       name: interfaceName,
       inheritance: inheritance
     });
   }
-  
+
   // Extract method definitions
   const methodPattern = /(?:public|private|protected|internal|static|virtual|override|abstract|sealed|async)\s+(?:<[^>]+>\s+)?(\w+(?:<[^>]+>)?)\s+(\w+)\s*\(([^)]*)\)/g;
-  
+
   while ((match = methodPattern.exec(content)) !== null) {
     const returnType = match[1];
     const methodName = match[2];
     const params = match[3].split(',').map(p => p.trim()).filter(p => p);
-    
+
     fileStructure.definitions.push({
       type: 'method',
       name: methodName,
@@ -570,19 +783,51 @@ function buildCodeMaps(selectedFiles) {
     files: [],
     relationships: []
   };
-  
-  // Parse each file
+
+  // First pass: Parse each file to build the file structures
+  const fileStructures = {};
   for (const file of selectedFiles) {
     const fileStructure = parseFile(file.path);
     codeMaps.files.push(fileStructure);
-    
-    // Extract relationships between files based on imports
+    fileStructures[file.path] = fileStructure;
+  }
+
+  // Second pass: Build a map of exported types by file
+  const exportedTypesByFile = {};
+  for (const [filePath, fileStructure] of Object.entries(fileStructures)) {
+    exportedTypesByFile[filePath] = new Set();
+
+    // Add exported classes
+    for (const def of fileStructure.definitions) {
+      if ((def.type === 'class' || def.type === 'interface') && def.isExported) {
+        exportedTypesByFile[filePath].add(def.name);
+      }
+    }
+
+    // Add exported enums
+    for (const enumDef of fileStructure.enums) {
+      if (enumDef.isExported) {
+        exportedTypesByFile[filePath].add(enumDef.name);
+      }
+    }
+
+    // Add exported type aliases
+    for (const api of fileStructure.publicAPI) {
+      if (api.type === 'type_alias') {
+        exportedTypesByFile[filePath].add(api.name);
+      }
+    }
+  }
+
+  // Third pass: Extract relationships between files
+  for (const [filePath, fileStructure] of Object.entries(fileStructures)) {
+    // Extract relationships based on imports
     for (const importItem of fileStructure.imports) {
       if (importItem.source) {
         // For JavaScript/TypeScript
         codeMaps.relationships.push({
           type: 'imports',
-          source: file.path,
+          source: filePath,
           target: importItem.source,
           items: importItem.names || [importItem.name]
         });
@@ -590,7 +835,7 @@ function buildCodeMaps(selectedFiles) {
         // For Python
         codeMaps.relationships.push({
           type: 'imports',
-          source: file.path,
+          source: filePath,
           target: importItem.module,
           items: importItem.items || []
         });
@@ -598,13 +843,70 @@ function buildCodeMaps(selectedFiles) {
         // For Java/C#
         codeMaps.relationships.push({
           type: 'imports',
-          source: file.path,
+          source: filePath,
           target: importItem.path
         });
       }
     }
+
+    // Extract relationships based on type references
+    for (const typeRef of fileStructure.typeReferences) {
+      // Find which file exports this type
+      for (const [targetFile, exportedTypes] of Object.entries(exportedTypesByFile)) {
+        if (targetFile !== filePath && exportedTypes.has(typeRef.name)) {
+          codeMaps.relationships.push({
+            type: 'references_type',
+            source: filePath,
+            target: targetFile,
+            typeName: typeRef.name
+          });
+          break; // Found the source file for this type
+        }
+      }
+    }
   }
-  
+
+  // Fourth pass: Build inheritance relationships
+  for (const fileStructure of codeMaps.files) {
+    for (const def of fileStructure.definitions) {
+      // Handle class inheritance
+      if (def.type === 'class' && def.extends) {
+        // Find which file exports the parent class
+        for (const [targetFile, exportedTypes] of Object.entries(exportedTypesByFile)) {
+          if (targetFile !== fileStructure.path && exportedTypes.has(def.extends)) {
+            codeMaps.relationships.push({
+              type: 'inherits_from',
+              source: fileStructure.path,
+              target: targetFile,
+              sourceType: def.name,
+              targetType: def.extends
+            });
+            break;
+          }
+        }
+      }
+
+      // Handle interface extension
+      if (def.type === 'interface' && def.extends && def.extends.length > 0) {
+        for (const extendedInterface of def.extends) {
+          // Find which file exports the extended interface
+          for (const [targetFile, exportedTypes] of Object.entries(exportedTypesByFile)) {
+            if (targetFile !== fileStructure.path && exportedTypes.has(extendedInterface)) {
+              codeMaps.relationships.push({
+                type: 'extends_interface',
+                source: fileStructure.path,
+                target: targetFile,
+                sourceType: def.name,
+                targetType: extendedInterface
+              });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
   return codeMaps;
 }
 

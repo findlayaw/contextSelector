@@ -367,7 +367,16 @@ Calls:
 
 ### Code Maps Mode
 
-Code Maps mode (enabled with `--codemaps`) provides a token-efficient structural view of your code. It focuses on API-level details like function signatures, class definitions, and import/export relationships. By default, it excludes full file contents to optimize token usage:
+Code Maps mode (enabled with `--codemaps`) provides a token-efficient structural view of your code. It focuses on API-level details like function signatures, class definitions, and import/export relationships. By default, it excludes full file contents to optimize token usage.
+
+#### Enhanced Features in Code Maps
+
+- **Type Reference Tracking**: Detects when types from one file are used in another
+- **Enum Detection**: Extracts and displays enum definitions with their members
+- **Public API Surface**: Identifies and highlights the public API of each file
+- **Access Level Detection**: Differentiates between public and private APIs
+- **Inheritance Tracking**: Builds complete type inheritance chains
+- **Cross-File Relationships**: Shows actual type usage relationships, not just imports
 
 ````markdown
 # Project Directory Structure
@@ -399,7 +408,7 @@ This section provides a structural overview of the codebase, focusing on API-lev
 **Definitions:**
 
 **Functions:**
-- `main()`
+- `main()` (exported)
 
 ### src/utils/helper.js
 
@@ -408,17 +417,48 @@ This section provides a structural overview of the codebase, focusing on API-lev
 **Definitions:**
 
 **Functions:**
-- `formatOutput(text)`
+- `formatOutput(text)` (exported)
 
 **Exports:**
 - CommonJS export: `formatOutput`
+
+**Public API:**
+- **Exported Functions:** `formatOutput`
+
+### src/utils/types.ts
+
+**Language:** typescript
+
+**Interfaces:**
+- `FormatOptions` (exported)
+
+**Enums:**
+- `OutputFormat` (exported, const)
+  - `TEXT = 'text'`
+  - `HTML = 'html'`
+  - `JSON = 'json'`
+
+**Type References:**
+- From `BaseTypes`: `BaseOptions`
+
+**Public API:**
+- **Exported Interfaces:** `FormatOptions`
+- **Exported Enums:** `OutputFormat`
 
 ## File Relationships
 
 ### src/index.js
 
-**Dependencies:**
+**Import Dependencies:**
 - Imports from `./utils/helper`: formatOutput
+
+**Type References:**
+- References type `FormatOptions` from `./utils/helper`
+
+### src/utils/types.ts
+
+**Interface Extensions:**
+- Interface `ExtendedOptions` extends `BaseOptions` from `./utils/base-types`
 
 ---
 

@@ -51,7 +51,30 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       result += '        <imports>\n';
       for (const imp of file.imports) {
         result += '          <import>\n';
-        result += `            <path>${escapeXml(imp.path)}</path>\n`;
+        if (imp.path) {
+          result += `            <path>${escapeXml(imp.path)}</path>\n`;
+        } else if (imp.source) {
+          result += `            <source>${escapeXml(imp.source)}</source>\n`;
+        } else if (imp.module) {
+          result += `            <module>${escapeXml(imp.module)}</module>\n`;
+        }
+
+        if (imp.type) {
+          result += `            <type>${escapeXml(imp.type)}</type>\n`;
+        }
+
+        if (imp.name) {
+          result += `            <name>${escapeXml(imp.name)}</name>\n`;
+        }
+
+        if (imp.names && imp.names.length > 0) {
+          result += '            <names>\n';
+          for (const name of imp.names) {
+            result += `              <name>${escapeXml(name)}</name>\n`;
+          }
+          result += '            </names>\n';
+        }
+
         if (imp.items && imp.items.length > 0) {
           result += '            <items>\n';
           for (const item of imp.items) {
@@ -62,6 +85,160 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
         result += '          </import>\n';
       }
       result += '        </imports>\n';
+    }
+
+    // Add enums
+    if (file.enums && file.enums.length > 0) {
+      result += '        <enums>\n';
+      for (const enumDef of file.enums) {
+        result += '          <enum>\n';
+        result += `            <name>${escapeXml(enumDef.name)}</name>\n`;
+
+        if (enumDef.isConst) {
+          result += '            <is_const>true</is_const>\n';
+        }
+
+        if (enumDef.isExported) {
+          result += '            <is_exported>true</is_exported>\n';
+        }
+
+        if (enumDef.members && enumDef.members.length > 0) {
+          result += '            <members>\n';
+          for (const member of enumDef.members) {
+            result += '              <member>\n';
+            result += `                <name>${escapeXml(member.name)}</name>\n`;
+            if (member.value) {
+              result += `                <value>${escapeXml(member.value)}</value>\n`;
+            }
+            result += '              </member>\n';
+          }
+          result += '            </members>\n';
+        }
+
+        result += '          </enum>\n';
+      }
+      result += '        </enums>\n';
+    }
+
+    // Add type references
+    if (file.typeReferences && file.typeReferences.length > 0) {
+      result += '        <type_references>\n';
+      for (const typeRef of file.typeReferences) {
+        result += '          <type_reference>\n';
+        result += `            <name>${escapeXml(typeRef.name)}</name>\n`;
+        if (typeRef.module) {
+          result += `            <module>${escapeXml(typeRef.module)}</module>\n`;
+        }
+        result += '          </type_reference>\n';
+      }
+      result += '        </type_references>\n';
+    }
+
+    // Add public API
+    if (file.publicAPI && file.publicAPI.length > 0) {
+      result += '        <public_api>\n';
+
+      // Group by type
+      const apiByType = {};
+      for (const api of file.publicAPI) {
+        if (!apiByType[api.type]) {
+          apiByType[api.type] = [];
+        }
+        apiByType[api.type].push(api);
+      }
+
+      // Classes
+      if (apiByType.class) {
+        result += '          <classes>\n';
+        for (const cls of apiByType.class) {
+          result += `            <class>${escapeXml(cls.name)}</class>\n`;
+        }
+        result += '          </classes>\n';
+      }
+
+      // Interfaces
+      if (apiByType.interface) {
+        result += '          <interfaces>\n';
+        for (const iface of apiByType.interface) {
+          result += `            <interface>${escapeXml(iface.name)}</interface>\n`;
+        }
+        result += '          </interfaces>\n';
+      }
+
+      // Functions
+      if (apiByType.function) {
+        result += '          <functions>\n';
+        for (const func of apiByType.function) {
+          result += `            <function>${escapeXml(func.name)}</function>\n`;
+        }
+        result += '          </functions>\n';
+      }
+
+      // Type aliases
+      if (apiByType.type_alias) {
+        result += '          <type_aliases>\n';
+        for (const typeAlias of apiByType.type_alias) {
+          result += '            <type_alias>\n';
+          result += `              <name>${escapeXml(typeAlias.name)}</name>\n`;
+          result += `              <value>${escapeXml(typeAlias.value)}</value>\n`;
+          result += '            </type_alias>\n';
+        }
+        result += '          </type_aliases>\n';
+      }
+
+      // Enums
+      if (apiByType.enum) {
+        result += '          <enums>\n';
+        for (const enumDef of apiByType.enum) {
+          result += '            <enum>\n';
+          result += `              <name>${escapeXml(enumDef.name)}</name>\n`;
+          if (enumDef.members && enumDef.members.length > 0) {
+            result += '              <members>\n';
+            for (const member of enumDef.members) {
+              result += `                <member>${escapeXml(member)}</member>\n`;
+            }
+            result += '              </members>\n';
+          }
+          result += '            </enum>\n';
+        }
+        result += '          </enums>\n';
+      }
+
+      // Properties
+      if (apiByType.property) {
+        result += '          <properties>\n';
+        for (const prop of apiByType.property) {
+          result += '            <property>\n';
+          result += `              <name>${escapeXml(prop.name)}</name>\n`;
+          result += `              <class_name>${escapeXml(prop.className)}</class_name>\n`;
+          if (prop.dataType) {
+            result += `              <data_type>${escapeXml(prop.dataType)}</data_type>\n`;
+          }
+          result += '            </property>\n';
+        }
+        result += '          </properties>\n';
+      }
+
+      // Methods
+      if (apiByType.method) {
+        result += '          <methods>\n';
+        for (const method of apiByType.method) {
+          result += '            <method>\n';
+          result += `              <name>${escapeXml(method.name)}</name>\n`;
+          result += `              <class_name>${escapeXml(method.className)}</class_name>\n`;
+          if (method.params && method.params.length > 0) {
+            result += '              <params>\n';
+            for (const param of method.params) {
+              result += `                <param>${escapeXml(param)}</param>\n`;
+            }
+            result += '              </params>\n';
+          }
+          result += '            </method>\n';
+        }
+        result += '          </methods>\n';
+      }
+
+      result += '        </public_api>\n';
     }
 
     // Add classes
@@ -194,23 +371,89 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
     // Add relationships for each source file
     for (const [source, relationships] of Object.entries(relationshipsBySource)) {
       result += `      <source_file path="${escapeXml(source)}">\n`;
-      result += '        <dependencies>\n';
+
+      // Group relationships by type
+      const relsByType = {
+        imports: [],
+        references_type: [],
+        inherits_from: [],
+        extends_interface: []
+      };
 
       for (const rel of relationships) {
-        result += `          <dependency target="${escapeXml(rel.target)}">\n`;
-
-        if (rel.items && rel.items.length > 0) {
-          result += '            <items>\n';
-          for (const item of rel.items) {
-            result += `              <item>${escapeXml(item)}</item>\n`;
-          }
-          result += '            </items>\n';
+        if (relsByType[rel.type]) {
+          relsByType[rel.type].push(rel);
+        } else {
+          relsByType.other = relsByType.other || [];
+          relsByType.other.push(rel);
         }
-
-        result += '          </dependency>\n';
       }
 
-      result += '        </dependencies>\n';
+      // Import dependencies
+      if (relsByType.imports.length > 0) {
+        result += '        <import_dependencies>\n';
+
+        for (const rel of relsByType.imports) {
+          result += `          <dependency target="${escapeXml(rel.target)}">\n`;
+
+          if (rel.items && rel.items.length > 0) {
+            result += '            <items>\n';
+            for (const item of rel.items) {
+              result += `              <item>${escapeXml(item)}</item>\n`;
+            }
+            result += '            </items>\n';
+          }
+
+          result += '          </dependency>\n';
+        }
+
+        result += '        </import_dependencies>\n';
+      }
+
+      // Type references
+      if (relsByType.references_type.length > 0) {
+        result += '        <type_references>\n';
+
+        for (const rel of relsByType.references_type) {
+          result += `          <reference target="${escapeXml(rel.target)}" type_name="${escapeXml(rel.typeName)}" />\n`;
+        }
+
+        result += '        </type_references>\n';
+      }
+
+      // Class inheritance
+      if (relsByType.inherits_from.length > 0) {
+        result += '        <class_inheritance>\n';
+
+        for (const rel of relsByType.inherits_from) {
+          result += `          <inheritance source_type="${escapeXml(rel.sourceType)}" target_type="${escapeXml(rel.targetType)}" target_file="${escapeXml(rel.target)}" />\n`;
+        }
+
+        result += '        </class_inheritance>\n';
+      }
+
+      // Interface extension
+      if (relsByType.extends_interface.length > 0) {
+        result += '        <interface_extensions>\n';
+
+        for (const rel of relsByType.extends_interface) {
+          result += `          <extension source_type="${escapeXml(rel.sourceType)}" target_type="${escapeXml(rel.targetType)}" target_file="${escapeXml(rel.target)}" />\n`;
+        }
+
+        result += '        </interface_extensions>\n';
+      }
+
+      // Other relationships
+      if (relsByType.other && relsByType.other.length > 0) {
+        result += '        <other_relationships>\n';
+
+        for (const rel of relsByType.other) {
+          result += `          <relationship type="${escapeXml(rel.type)}" target="${escapeXml(rel.target)}" />\n`;
+        }
+
+        result += '        </other_relationships>\n';
+      }
+
       result += '      </source_file>\n';
     }
 
