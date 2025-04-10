@@ -106,6 +106,9 @@ function extractJavaScriptStructure(content, fileStructure) {
   // Extract function definitions
   extractJSFunctions(content, fileStructure);
 
+  // Extract prototype-based inheritance (JavaScript)
+  extractJSPrototypes(content, fileStructure);
+
   // Extract interface definitions (TypeScript)
   extractJSInterfaces(content, fileStructure);
 
@@ -120,6 +123,70 @@ function extractJavaScriptStructure(content, fileStructure) {
 
   // Extract exports
   extractJSExports(content, fileStructure);
+}
+
+/**
+ * Extract prototype-based inheritance from JavaScript
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractJSPrototypes(content, fileStructure) {
+  // Match prototype assignments for methods
+  const protoMethodPattern = /(\w+)\.prototype\.(\w+)\s*=\s*function\s*\(([^)]*)\)/g;
+  let match;
+
+  // Track classes created via prototype pattern
+  const protoClasses = new Map();
+
+  while ((match = protoMethodPattern.exec(content)) !== null) {
+    const className = match[1];
+    const methodName = match[2];
+    const params = match[3].split(',').map(p => p.trim()).filter(p => p);
+
+    // Check if we already have this prototype class
+    if (!protoClasses.has(className)) {
+      // Create a new prototype class
+      protoClasses.set(className, {
+        type: 'prototype_class',
+        name: className,
+        methods: []
+      });
+    }
+
+    // Add method to the prototype class
+    protoClasses.get(className).methods.push({
+      type: 'method',
+      name: methodName,
+      params: params,
+      className: className
+    });
+  }
+
+  // Match prototype inheritance
+  const protoInheritPattern = /(\w+)\.prototype\s*=\s*(?:new\s+|Object\.create\s*\()\s*(\w+)(?:\(|\))/g;
+
+  while ((match = protoInheritPattern.exec(content)) !== null) {
+    const childClass = match[1];
+    const parentClass = match[2];
+
+    // If we have the child class, add inheritance info
+    if (protoClasses.has(childClass)) {
+      protoClasses.get(childClass).extends = parentClass;
+    } else {
+      // Create a new prototype class with inheritance
+      protoClasses.set(childClass, {
+        type: 'prototype_class',
+        name: childClass,
+        extends: parentClass,
+        methods: []
+      });
+    }
+  }
+
+  // Add all prototype classes to definitions
+  for (const protoClass of protoClasses.values()) {
+    fileStructure.definitions.push(protoClass);
+  }
 }
 
 /**
@@ -271,26 +338,135 @@ function extractJSFunctions(content, fileStructure) {
     const funcName = match[2];
     const params = match[3].split(',').map(p => p.trim()).filter(p => p);
 
-    fileStructure.definitions.push({
+    // Check if function is exported
+    const isExported = match[0].includes('export');
+
+    const funcDef = {
       type: 'function',
       name: funcName,
       isGenerator: isGenerator,
-      params: params
-    });
+      params: params,
+      isExported: isExported
+    };
+
+    fileStructure.definitions.push(funcDef);
+
+    // Add to public API if exported
+    if (isExported) {
+      fileStructure.publicAPI.push({
+        type: 'function',
+        name: funcName
+      });
+    }
   }
 
   // Match arrow functions assigned to variables
-  const arrowFuncPattern = /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>/g;
+  const arrowFuncPattern = /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>/g;
 
   while ((match = arrowFuncPattern.exec(content)) !== null) {
     const funcName = match[1];
     const params = match[2].split(',').map(p => p.trim()).filter(p => p);
+    const isExported = match[0].includes('export');
 
-    fileStructure.definitions.push({
+    const funcDef = {
       type: 'arrow_function',
       name: funcName,
+      params: params,
+      isExported: isExported
+    };
+
+    fileStructure.definitions.push(funcDef);
+
+    // Add to public API if exported
+    if (isExported) {
+      fileStructure.publicAPI.push({
+        type: 'function',
+        name: funcName
+      });
+    }
+  }
+
+  // Match object method definitions
+  const objectMethodPattern = /(\w+)\s*:\s*function\s*\(([^)]*)\)/g;
+
+  while ((match = objectMethodPattern.exec(content)) !== null) {
+    const methodName = match[1];
+    const params = match[2].split(',').map(p => p.trim()).filter(p => p);
+
+    fileStructure.definitions.push({
+      type: 'object_method',
+      name: methodName,
       params: params
     });
+  }
+
+  // Match shorthand object methods
+  const shorthandMethodPattern = /(\w+)\s*\(([^)]*)\)\s*{/g;
+
+  while ((match = shorthandMethodPattern.exec(content)) !== null) {
+    // Skip if this is a standard function declaration (already captured)
+    if (content.substring(Math.max(0, match.index - 10), match.index).includes('function')) {
+      continue;
+    }
+
+    const methodName = match[1];
+    const params = match[2].split(',').map(p => p.trim()).filter(p => p);
+
+    fileStructure.definitions.push({
+      type: 'object_method',
+      name: methodName,
+      params: params
+    });
+  }
+
+  // Extract JSDoc comments for functions to get return types and parameter types
+  extractJSDocComments(content, fileStructure);
+}
+
+/**
+ * Extract JSDoc comments from JavaScript
+ * @param {string} content - File content
+ * @param {Object} fileStructure - File structure to populate
+ */
+function extractJSDocComments(content, fileStructure) {
+  // Match JSDoc comment blocks
+  const jsdocPattern = /\/\*\*\s*([\s\S]*?)\*\/\s*(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function|\([^)]*\)\s*=>))/g;
+  let match;
+
+  while ((match = jsdocPattern.exec(content)) !== null) {
+    const jsdocContent = match[1];
+    const functionName = match[2] || match[3];
+
+    if (!functionName) continue;
+
+    // Find the corresponding function definition
+    const funcDef = fileStructure.definitions.find(def =>
+      (def.type === 'function' || def.type === 'arrow_function') && def.name === functionName
+    );
+
+    if (!funcDef) continue;
+
+    // Extract return type from JSDoc
+    const returnTypeMatch = jsdocContent.match(/@returns?\s+{([^}]+)}/i);
+    if (returnTypeMatch) {
+      funcDef.returnType = returnTypeMatch[1].trim();
+    }
+
+    // Extract parameter types from JSDoc
+    const paramMatches = jsdocContent.matchAll(/@param\s+{([^}]+)}\s+(\w+)/g);
+    if (paramMatches) {
+      const paramTypes = {};
+      for (const paramMatch of paramMatches) {
+        const paramType = paramMatch[1].trim();
+        const paramName = paramMatch[2].trim();
+        paramTypes[paramName] = paramType;
+      }
+
+      // Add parameter types to function definition
+      if (Object.keys(paramTypes).length > 0) {
+        funcDef.paramTypes = paramTypes;
+      }
+    }
   }
 }
 
@@ -528,9 +704,16 @@ function extractJSExports(content, fileStructure) {
   let match;
 
   while ((match = namedExportPattern.exec(content)) !== null) {
+    const exportName = match[1];
     fileStructure.exports.push({
       type: 'named',
-      name: match[1]
+      name: exportName
+    });
+
+    // Add to public API
+    fileStructure.publicAPI.push({
+      type: 'export',
+      name: exportName
     });
   }
 
@@ -538,27 +721,86 @@ function extractJSExports(content, fileStructure) {
   const defaultExportPattern = /export\s+default\s+(?:class|function)?\s*(\w+)?/g;
 
   while ((match = defaultExportPattern.exec(content)) !== null) {
+    const exportName = match[1] || 'anonymous';
     fileStructure.exports.push({
       type: 'default',
-      name: match[1] || 'anonymous'
+      name: exportName
     });
+
+    // Add to public API
+    if (exportName !== 'anonymous') {
+      fileStructure.publicAPI.push({
+        type: 'export',
+        name: exportName,
+        isDefault: true
+      });
+    }
   }
 
-  // Match module.exports
+  // Match module.exports = {...}
   const moduleExportsPattern = /module\.exports\s*=\s*{([^}]+)}/g;
 
   while ((match = moduleExportsPattern.exec(content)) !== null) {
     const exportedItems = match[1].split(',').map(item => {
       const parts = item.split(':').map(part => part.trim());
-      return parts.length > 1 ? parts[1] : parts[0];
+      return {
+        key: parts[0].trim(),
+        value: parts.length > 1 ? parts[1].trim() : parts[0].trim()
+      };
     });
 
     for (const item of exportedItems) {
       fileStructure.exports.push({
         type: 'commonjs',
-        name: item
+        name: item.value
+      });
+
+      // Add to public API
+      fileStructure.publicAPI.push({
+        type: 'export',
+        name: item.value,
+        exportName: item.key
       });
     }
+  }
+
+  // Match module.exports = function/class/variable
+  const moduleExportsSinglePattern = /module\.exports\s*=\s*(\w+)/g;
+
+  while ((match = moduleExportsSinglePattern.exec(content)) !== null) {
+    const exportName = match[1];
+    fileStructure.exports.push({
+      type: 'commonjs',
+      name: exportName
+    });
+
+    // Add to public API
+    fileStructure.publicAPI.push({
+      type: 'export',
+      name: exportName,
+      isDefault: true
+    });
+  }
+
+  // Match exports.name = value
+  const exportsPropertyPattern = /exports\.(\w+)\s*=\s*(\w+)/g;
+
+  while ((match = exportsPropertyPattern.exec(content)) !== null) {
+    const exportKey = match[1];
+    const exportValue = match[2];
+
+    fileStructure.exports.push({
+      type: 'commonjs_property',
+      name: exportValue,
+      exportName: exportKey
+    });
+
+    // Add to public API
+    fileStructure.publicAPI.push({
+      type: 'export',
+      name: exportValue,
+      exportName: exportKey
+    });
   }
 }
 

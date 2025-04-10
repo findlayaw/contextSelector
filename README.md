@@ -378,6 +378,14 @@ Code Maps mode (enabled with `--codemaps`) provides a token-efficient structural
 - **Inheritance Tracking**: Builds complete type inheritance chains
 - **Cross-File Relationships**: Shows actual type usage relationships, not just imports
 
+#### JavaScript-Specific Features
+
+- **Prototype-Based Classes**: Detects JavaScript's prototype-based inheritance patterns
+- **JSDoc Type Information**: Extracts parameter and return types from JSDoc comments
+- **CommonJS Module Support**: Enhanced detection of CommonJS exports and imports
+- **Object Method Detection**: Identifies methods defined in object literals
+- **Export Detection**: Shows which functions and classes are exported
+
 ````markdown
 # Project Directory Structure
 
@@ -408,7 +416,13 @@ This section provides a structural overview of the codebase, focusing on API-lev
 **Definitions:**
 
 **Functions:**
-- `main()` (exported)
+- `main(options: ConfigOptions)` -> `boolean` (exported)
+- `processData(data: string, callback: Function)` -> `void` (arrow function, exported)
+
+**Prototype Classes:**
+- `DataProcessor` extends `EventEmitter`
+  - Method `process(data)` -> `Object`
+  - Method `validate(input)` -> `boolean`
 
 ### src/utils/helper.js
 
@@ -450,10 +464,14 @@ This section provides a structural overview of the codebase, focusing on API-lev
 ### src/index.js
 
 **Import Dependencies:**
-- Imports from `./utils/helper`: formatOutput
+- Imports from `./utils/helper`: formatOutput, DataProcessor
+- Imports from `events`: EventEmitter
 
 **Type References:**
 - References type `FormatOptions` from `./utils/helper`
+
+**Prototype Inheritance:**
+- Class `DataProcessor` inherits from `EventEmitter` in `events`
 
 ### src/utils/types.ts
 

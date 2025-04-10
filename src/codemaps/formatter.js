@@ -127,6 +127,42 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
                 result += ` (${method.accessLevel})`;
               }
 
+              // Add return type if available
+              if (method.returnType) {
+                result += ` -> ${method.returnType}`;
+              }
+
+              result += '\n';
+            }
+          }
+        }
+
+        result += '\n';
+      }
+
+      // Add prototype-based classes (JavaScript)
+      if (definitionsByType.prototype_class) {
+        result += '**Prototype Classes:**\n\n';
+
+        for (const cls of definitionsByType.prototype_class) {
+          result += `- \`${cls.name}\``;
+
+          if (cls.extends) {
+            result += ` extends \`${cls.extends}\``;
+          }
+
+          result += '\n';
+
+          // Add methods if available
+          if (cls.methods && cls.methods.length > 0) {
+            for (const method of cls.methods) {
+              result += `  - Method \`${method.name}(${method.params.join(', ')})\``;
+
+              // Add return type if available from JSDoc
+              if (method.returnType) {
+                result += ` -> ${method.returnType}`;
+              }
+
               result += '\n';
             }
           }
@@ -162,13 +198,21 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
       }
 
       // Add functions
-      if (definitionsByType.function || definitionsByType.arrow_function) {
+      if (definitionsByType.function || definitionsByType.arrow_function || definitionsByType.object_method) {
         result += '**Functions:**\n\n';
 
         // Regular functions
         if (definitionsByType.function) {
           for (const func of definitionsByType.function) {
-            result += `- \`${func.name}(${func.params.join(', ')})\``;
+            // Format parameters with types if available
+            let paramsStr = func.params.map(p => {
+              if (func.paramTypes && func.paramTypes[p]) {
+                return `${p}: ${func.paramTypes[p]}`;
+              }
+              return p;
+            }).join(', ');
+
+            result += `- \`${func.name}(${paramsStr})\``;
 
             if (func.isGenerator) {
               result += ' (generator)';
@@ -190,11 +234,38 @@ async function formatCodeMapsForLLM(selectedFiles, directoryTree, codeMaps, opti
         // Arrow functions
         if (definitionsByType.arrow_function) {
           for (const func of definitionsByType.arrow_function) {
-            result += `- \`${func.name}(${func.params.join(', ')})\` (arrow function)`;
+            // Format parameters with types if available
+            let paramsStr = func.params.map(p => {
+              if (func.paramTypes && func.paramTypes[p]) {
+                return `${p}: ${func.paramTypes[p]}`;
+              }
+              return p;
+            }).join(', ');
+
+            result += `- \`${func.name}(${paramsStr})\` (arrow function)`;
+
+            // Add return type if available
+            if (func.returnType) {
+              result += ` -> ${func.returnType}`;
+            }
 
             // Add export status
             if (func.isExported) {
               result += ' (exported)';
+            }
+
+            result += '\n';
+          }
+        }
+
+        // Object methods
+        if (definitionsByType.object_method) {
+          for (const func of definitionsByType.object_method) {
+            result += `- \`${func.name}(${func.params.join(', ')})\` (object method)`;
+
+            // Add return type if available
+            if (func.returnType) {
+              result += ` -> ${func.returnType}`;
             }
 
             result += '\n';
