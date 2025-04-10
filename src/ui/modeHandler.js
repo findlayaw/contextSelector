@@ -6,8 +6,8 @@
 const MODES = {
   STANDARD: 'standard',
   GRAPH: 'graph',
-  CODEMAPS: 'codemaps'
-  // Add more modes here in the future
+  CODEMAPS: 'codemaps',
+  COMBINED: 'combined' // New combined Graph + CodeMaps mode
 };
 
 /**
@@ -41,6 +41,8 @@ function getModeName(mode) {
       return 'Graph Analysis';
     case MODES.CODEMAPS:
       return 'Code Maps';
+    case MODES.COMBINED:
+      return 'Combined (Graph + CodeMaps)';
     default:
       return 'Unknown';
   }

@@ -13,6 +13,7 @@ program
   .option('-d, --directory <path>', 'Specify the starting directory', process.cwd())
   .option('-g, --graph', 'Enable graph mode to analyze code relationships')
   .option('-c, --codemaps', 'Enable code maps mode to extract code structure')
+  .option('-b, --combined', 'Enable combined mode (Graph + CodeMaps)')
   .option('--include-contents', 'Include file contents in code maps mode (less token efficient)')
   .option('--xml', 'Use XML output format instead of Markdown')
   .action(async (options) => {

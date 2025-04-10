@@ -12,6 +12,8 @@ const graphXmlFormatter = require('./graph/xmlFormatter');
 const codeMapsParser = require('./codemaps/parser');
 const codeMapsFormatter = require('./codemaps/formatter');
 const codeMapsXmlFormatter = require('./codemaps/xmlFormatter');
+const combinedFormatter = require('./combined/formatter');
+const combinedXmlFormatter = require('./combined/xmlFormatter');
 const tokenCounter = require('./utils/tokenCounter');
 const modeHandler = require('./ui/modeHandler');
 const outputHandler = require('./ui/outputHandler');
@@ -71,6 +73,41 @@ async function run(options) {
         }
 
         console.log(`Built code graph with ${codeGraph.nodes.length} nodes and ${codeGraph.edges.length} relationships`);
+      } else if (result.mode === modeHandler.MODES.COMBINED) {
+        console.log('Building combined code graph and code maps...');
+        // Build code graph
+        const codeGraph = graphAnalyzer.buildCodeGraph(result.selectedFiles);
+        // Build code maps
+        const codeMaps = codeMapsParser.buildCodeMaps(result.selectedFiles);
+
+        // Format the combined output based on the output format
+        if (result.outputFormat === outputHandler.OUTPUT_FORMATS.XML) {
+          formattedContent = await combinedXmlFormatter.formatCombinedForLLM(
+            result.selectedFiles,
+            result.directoryTree,
+            codeGraph,
+            codeMaps,
+            {
+              // Include file contents if specified in options or from terminal UI
+              includeFileContents: result.includeContents
+            },
+            result.selectedPrompts
+          );
+        } else {
+          formattedContent = await combinedFormatter.formatCombinedForLLM(
+            result.selectedFiles,
+            result.directoryTree,
+            codeGraph,
+            codeMaps,
+            {
+              // Include file contents if specified in options or from terminal UI
+              includeFileContents: result.includeContents
+            },
+            result.selectedPrompts
+          );
+        }
+
+        console.log(`Built combined view with ${codeGraph.nodes.length} nodes, ${codeGraph.edges.length} relationships, and ${codeMaps.files.length} file definitions`);
       } else if (result.mode === modeHandler.MODES.CODEMAPS) {
         console.log('Building code maps...');
         // Build code maps

@@ -58,8 +58,14 @@ const state = {
  */
 function initState(options) {
   // Set initial mode based on options
-  if (options.graphMode) {
+  if (options.combined) {
+    state.currentMode = modeHandler.MODES.COMBINED;
+    // Store the includeContents option
+    state.includeContents = options.includeContents || false;
+  } else if (options.graphMode) {
     state.currentMode = modeHandler.MODES.GRAPH;
+    // Store the includeContents option
+    state.includeContents = options.includeContents || false;
   } else if (options.codeMapsMode) {
     state.currentMode = modeHandler.MODES.CODEMAPS;
     // Store the includeContents option

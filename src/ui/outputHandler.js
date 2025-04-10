@@ -24,9 +24,9 @@ const CODEMAPS_CONTENT_OPTIONS = {
 function getNextOutput(currentFormat, currentMode, includeContents) {
   const modeHandler = require('./modeHandler');
 
-  // For CodeMaps and Graph modes, we have a special cycle:
+  // For CodeMaps, Graph, and Combined modes, we have a special cycle:
   // structure-only -> markdown -> xml -> structure-only
-  if (currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH) {
+  if (currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH || currentMode === modeHandler.MODES.COMBINED) {
     if (!includeContents) {
       // If contents are disabled (structure-only), enable them and use markdown
       return {
@@ -65,8 +65,8 @@ function getNextOutput(currentFormat, currentMode, includeContents) {
 function getOutputName(format, includeContents, currentMode) {
   const modeHandler = require('./modeHandler');
 
-  // Structure-only mode for both CodeMaps and Graph Mode
-  if ((currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH) && !includeContents) {
+  // Structure-only mode for CodeMaps, Graph Mode, and Combined Mode
+  if ((currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH || currentMode === modeHandler.MODES.COMBINED) && !includeContents) {
     return 'Structure Only';
   } else if (format === OUTPUT_FORMATS.MARKDOWN) {
     return 'Markdown';

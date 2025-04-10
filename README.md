@@ -67,6 +67,12 @@ aw --codemaps
 
 # Code Maps mode with full file contents (less token efficient)
 aw --codemaps --include-contents
+
+# Combined mode (Graph + CodeMaps) - both code relationships and API-level structure
+aw --combined
+
+# Combined mode with full file contents (less token efficient)
+aw --combined --include-contents
 ```
 
 You can toggle between modes while the application is running by pressing `m`.
@@ -196,50 +202,54 @@ You can also use XML format by pressing `o` or using the `--xml` command line op
 
 You can cycle through available output formats by pressing the `o` key:
 
-- In Standard and Graph modes: Toggle between Markdown and XML
-- In CodeMaps mode: Cycle between "Structure Only" (default), "Markdown with Contents", and "XML with Contents"
+- In Standard mode: Toggle between Markdown and XML
+- In Graph, CodeMaps, and Combined modes: Cycle between "Structure Only" (default), "Markdown with Contents", and "XML with Contents"
 
 ## Application Modes
 
-The Context Selector tool offers three different modes, each designed for specific use cases:
+The Context Selector tool offers four different modes, each designed for specific use cases:
 
 | Mode | Description | Best For | Token Usage |
 |------|-------------|----------|-------------|
 | Standard | Full file contents with directory structure | Detailed code analysis | Baseline |
 | Graph Analysis | Code relationships with full file contents | Understanding code interactions | Higher |
 | Code Maps | API-level structure without implementation details | Architecture overview | Lower |
+| Combined | Both code relationships and API-level structure | Comprehensive code understanding | Varies |
 
 ### When to Use Each Mode
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Mode Selection Guide                        │
-├───────────────────┬───────────────────────┬─────────────────────┤
-│   Standard Mode   │   Graph Analysis Mode │    Code Maps Mode   │
-├───────────────────┼───────────────────────┼─────────────────────┤
-│ • Implementation  │ • Code relationships  │ • API structure     │
-│   details         │ • Function calls      │ • Type definitions  │
-│ • Debugging       │ • Dependencies        │ • Token efficiency  │
-│ • Small codebases │ • Class hierarchies   │ • Large codebases   │
-│ • Algorithms      │ • Data flow           │ • Architecture      │
-└───────────────────┴───────────────────────┴─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Mode Selection Guide                                │
+├───────────────────┬───────────────────────┬─────────────────────┬───────────┤
+│   Standard Mode   │   Graph Analysis Mode │    Code Maps Mode   │ Combined  │
+├───────────────────┼───────────────────────┼─────────────────────┼───────────┤
+│ • Implementation  │ • Code relationships  │ • API structure     │ • All of  │
+│   details         │ • Function calls      │ • Type definitions  │   these   │
+│ • Debugging       │ • Dependencies        │ • Token efficiency  │ • Complete│
+│ • Small codebases │ • Class hierarchies   │ • Large codebases   │   view    │
+│ • Algorithms      │ • Data flow           │ • Architecture      │           │
+└───────────────────┴───────────────────────┴─────────────────────┴───────────┘
                              ▲
                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                       Selection Factors                          │
-├───────────────────────────┬───────────────────────────────────┬─┤
-│ Need implementation       │ Need to understand                │ │
-│ details?           Yes ───┼──► Standard Mode                  │ │
-│                           │                                   │ │
-│ Need to understand        │ Need to understand                │ │
-│ code relationships? Yes ──┼──► Graph Analysis Mode            │ │
-│                           │                                   │ │
-│ Working with large        │ Need to optimize                  │ │
-│ codebase?         Yes ───┼──► Code Maps Mode                  │ │
-│                           │                                   │ │
-│ Need architecture         │ Need high-level                   │ │
-│ overview?         Yes ───┼──► Code Maps Mode                  │ │
-└───────────────────────────┴───────────────────────────────────┴─┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Selection Factors                                      │
+├───────────────────────────┬───────────────────────────────────────────────┬─┤
+│ Need implementation       │ Need to understand                            │ │
+│ details?           Yes ───┼──► Standard Mode                              │ │
+│                           │                                               │ │
+│ Need to understand        │ Need to understand                            │ │
+│ code relationships? Yes ──┼──► Graph Analysis Mode                        │ │
+│                           │                                               │ │
+│ Working with large        │ Need to optimize                              │ │
+│ codebase?         Yes ───┼──► Code Maps Mode                              │ │
+│                           │                                               │ │
+│ Need architecture         │ Need high-level                               │ │
+│ overview?         Yes ───┼──► Code Maps Mode                              │ │
+│                           │                                               │ │
+│ Need both relationships   │ Need comprehensive                            │ │
+│ and structure?    Yes ───┼──► Combined Mode                              │ │
+└───────────────────────────┴───────────────────────────────────────────────┴─┘
 ```
 
 #### Standard Mode
@@ -263,6 +273,13 @@ The Context Selector tool offers three different modes, each designed for specif
 - For planning refactoring work at a high level
 - When you need to optimize token usage
 - For understanding the public interfaces without implementation details
+
+#### Combined Mode
+- When you need both relationship information and structural details
+- For comprehensive understanding of complex codebases
+- When analyzing both the architecture and the interactions between components
+- For advanced refactoring that requires understanding both structure and dependencies
+- When you want the best of both Graph and CodeMaps modes in a single view
 
 ### Standard Mode
 
@@ -524,7 +541,116 @@ Full file contents have been excluded to optimize token usage. This Code Maps vi
 ---
 
 If you use the `--include-contents` option, the full file contents will be included at the end, similar to standard mode.
+
+### Combined Mode
+
+Combined mode (enabled with `--combined`) provides the best of both Graph Mode and Code Maps Mode. It includes both the relationship information from Graph Mode and the structural API-level details from Code Maps Mode:
+
+````markdown
+# Project Directory Structure
+
+```
+project/
+  src/
+    index.js
+    utils/
+      helper.js
+  package.json
+```
+
+---
+
+# Code Graph Overview
+
+Total Files: 3
+Total Nodes: 8
+Total Relationships: 5
+
+## Node Types
+- file: 3
+- function: 4
+- class: 1
+
+## Relationship Types
+- imports: 2
+- defined_in: 3
+
+---
+
+# File Dependencies
+
+## src/index.js
+
+Dependencies:
+- helper.js (src/utils/helper.js)
+
+---
+
+# Function Calls
+
+## main (src/index.js)
+
+Calls:
+- formatOutput (src/utils/helper.js)
+
+---
+
+# Code Maps
+
+This section provides a structural overview of the codebase, focusing on API-level information.
+
+## File Definitions
+
+### src/index.js
+
+**Language:** javascript
+
+**Imports:**
+- CommonJS require `helper` from `./utils/helper`
+
+**Definitions:**
+
+**Functions:**
+- `main(options)` (exported)
+- `processData(data, callback)` (arrow function, exported)
+
+**Public API:**
+- **Exported Functions:** `main`, `processData`
+
+### src/utils/helper.js
+
+**Language:** javascript
+
+**Definitions:**
+
+**Functions:**
+- `formatOutput(text)` (exported)
+
+**Exports:**
+- CommonJS export: `formatOutput`
+
+## File Relationships
+
+### src/index.js
+
+**Import Dependencies:**
+- Imports from `./utils/helper`: formatOutput
+
+---
+
+# Note on Selected Files
+
+Full file contents have been excluded to optimize token usage. This Combined view focuses on structural information, relationships, and API definitions only.
+
+## Selected Files (Structure Only)
+- src/index.js
+- src/utils/helper.js
+- package.json
+
+---
 ````
+
+Like the other modes, Combined mode also supports the `--include-contents` option to include full file contents, and it works with both Markdown and XML output formats.
 
 ### Token Efficiency Comparison
 
@@ -533,6 +659,7 @@ The different modes have varying levels of token efficiency, which can be import
 - **Standard Mode**: Baseline token usage (100%)
 - **Graph Analysis Mode**: Typically 5-10% more tokens than Standard Mode due to added relationship information
 - **Code Maps Mode**: Typically 50-80% fewer tokens than Standard Mode when excluding file contents
+- **Combined Mode**: Typically 10-20% more tokens than Code Maps Mode when excluding file contents, but provides much more comprehensive information
 
 For large codebases, Code Maps mode can allow you to include significantly more files within your token budget, giving the LLM a broader view of your project structure.
 

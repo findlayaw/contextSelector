@@ -82,9 +82,9 @@ function updateTokenCount() {
     if (state.currentMode === modeHandler.MODES.GRAPH) {
       // Rough estimate for graph information based on number of files
       state.tokenCount += state.selectedFiles.length * 50;
-    } else if (state.currentMode === modeHandler.MODES.CODEMAPS) {
+    } else if (state.currentMode === modeHandler.MODES.CODEMAPS || state.currentMode === modeHandler.MODES.COMBINED) {
       if (!state.includeContents) {
-        // In CodeMaps mode without file contents, we only include structure
+        // In CodeMaps/Combined mode without file contents, we only include structure
         // So we subtract the tokens from the file contents and add a smaller amount for structure
         for (const file of state.selectedFiles) {
           const content = fileSystem.readFileContent(file.path);
@@ -97,9 +97,19 @@ function updateTokenCount() {
 
         // Add a small fixed amount for the file list
         state.tokenCount += 50;
+
+        // For Combined mode, add extra tokens for the graph information
+        if (state.currentMode === modeHandler.MODES.COMBINED) {
+          state.tokenCount += state.selectedFiles.length * 40;
+        }
       } else {
         // If including file contents, add tokens for the structure on top of file contents
         state.tokenCount += state.selectedFiles.length * 25;
+
+        // For Combined mode, add extra tokens for the graph information
+        if (state.currentMode === modeHandler.MODES.COMBINED) {
+          state.tokenCount += state.selectedFiles.length * 40;
+        }
       }
     }
   }
