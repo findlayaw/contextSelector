@@ -6,10 +6,14 @@ const fileSystem = require('../simpleFileSystem');
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
  * @param {Object} codeGraph - Code graph object
+ * @param {Object} options - Formatting options
+ * @param {boolean} options.includeFileContents - Whether to include full file contents (default: true)
  * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard in XML format
  */
-async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, selectedPrompts = []) {
+async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, options = {}, selectedPrompts = []) {
+  // Set default options
+  const includeFileContents = options.includeFileContents !== undefined ? options.includeFileContents : true;
   let result = '';
 
   // Add XML header
@@ -134,24 +138,39 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, select
 
   result += '  </function_calls>\n\n';
 
-  // Add files
-  result += '  <files>\n';
+  // Add files if requested
+  if (includeFileContents) {
+    result += '  <files>\n';
 
-  for (const file of selectedFiles) {
-    const content = await fileSystem.readFileContent(file.path);
-    const extension = path.extname(file.path).substring(1); // Remove the dot
+    for (const file of selectedFiles) {
+      const content = await fileSystem.readFileContent(file.path);
+      const extension = path.extname(file.path).substring(1); // Remove the dot
 
-    // Add file element
-    result += '    <file>\n';
-    result += `      <path>${file.path}</path>\n`;
-    result += `      <language>${extension || 'txt'}</language>\n`;
-    result += '      <content><![CDATA[\n';
-    result += content;
-    result += '      ]]></content>\n';
-    result += '    </file>\n\n';
+      // Add file element
+      result += '    <file>\n';
+      result += `      <path>${file.path}</path>\n`;
+      result += `      <language>${extension || 'txt'}</language>\n`;
+      result += '      <content><![CDATA[\n';
+      result += content;
+      result += '      ]]></content>\n';
+      result += '    </file>\n\n';
+    }
+
+    result += '  </files>\n';
+  } else {
+    // Add a note about file contents being excluded for token efficiency
+    result += '  <note>\n';
+    result += '    <title>Note on Selected Files</title>\n';
+    result += '    <message>Full file contents have been excluded to optimize token usage. This Graph Mode view focuses on structural information and relationships only.</message>\n';
+    result += '    <selected_files>\n';
+
+    for (const file of selectedFiles) {
+      result += `      <file_path>${escapeXml(file.path)}</file_path>\n`;
+    }
+
+    result += '    </selected_files>\n';
+    result += '  </note>\n';
   }
-
-  result += '  </files>\n';
 
   // Add instructions section if prompts are selected
   if (selectedPrompts && selectedPrompts.length > 0) {

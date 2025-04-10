@@ -51,6 +51,10 @@ async function run(options) {
             result.selectedFiles,
             result.directoryTree,
             codeGraph,
+            {
+              // Include file contents if specified in options or from terminal UI
+              includeFileContents: result.includeContents
+            },
             result.selectedPrompts
           );
         } else {
@@ -58,6 +62,10 @@ async function run(options) {
             result.selectedFiles,
             result.directoryTree,
             codeGraph,
+            {
+              // Include file contents if specified in options or from terminal UI
+              includeFileContents: result.includeContents
+            },
             result.selectedPrompts
           );
         }

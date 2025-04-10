@@ -18,17 +18,17 @@ const CODEMAPS_CONTENT_OPTIONS = {
  * Get the next output format in the cycle
  * @param {string} currentFormat - Current output format
  * @param {string} currentMode - Current application mode
- * @param {boolean} includeContents - Current content inclusion setting for CodeMaps
+ * @param {boolean} includeContents - Current content inclusion setting for CodeMaps/Graph Mode
  * @returns {Object} - Next format and content inclusion setting
  */
 function getNextOutput(currentFormat, currentMode, includeContents) {
   const modeHandler = require('./modeHandler');
-  
-  // For CodeMaps mode, we have a special cycle:
-  // disabled -> markdown -> xml -> disabled
-  if (currentMode === modeHandler.MODES.CODEMAPS) {
+
+  // For CodeMaps and Graph modes, we have a special cycle:
+  // structure-only -> markdown -> xml -> structure-only
+  if (currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH) {
     if (!includeContents) {
-      // If contents are disabled, enable them and use markdown
+      // If contents are disabled (structure-only), enable them and use markdown
       return {
         format: OUTPUT_FORMATS.MARKDOWN,
         includeContents: true
@@ -40,7 +40,7 @@ function getNextOutput(currentFormat, currentMode, includeContents) {
         includeContents: true
       };
     } else {
-      // If XML with contents, disable contents
+      // If XML with contents, disable contents (structure-only)
       return {
         format: OUTPUT_FORMATS.MARKDOWN,
         includeContents: false
@@ -58,14 +58,15 @@ function getNextOutput(currentFormat, currentMode, includeContents) {
 /**
  * Get a human-readable name for an output format
  * @param {string} format - Output format identifier
- * @param {boolean} includeContents - Whether file contents are included (for CodeMaps)
+ * @param {boolean} includeContents - Whether file contents are included (for CodeMaps/Graph Mode)
  * @param {string} currentMode - Current application mode
  * @returns {string} - Human-readable output format name
  */
 function getOutputName(format, includeContents, currentMode) {
   const modeHandler = require('./modeHandler');
-  
-  if (currentMode === modeHandler.MODES.CODEMAPS && !includeContents) {
+
+  // Structure-only mode for both CodeMaps and Graph Mode
+  if ((currentMode === modeHandler.MODES.CODEMAPS || currentMode === modeHandler.MODES.GRAPH) && !includeContents) {
     return 'Structure Only';
   } else if (format === OUTPUT_FORMATS.MARKDOWN) {
     return 'Markdown';

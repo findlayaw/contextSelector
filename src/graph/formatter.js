@@ -11,10 +11,14 @@ const tokenCounter = require('../utils/tokenCounter');
  * @param {Array} selectedFiles - Array of selected file objects
  * @param {Object} directoryTree - Directory tree object
  * @param {Object} codeGraph - Code graph object
+ * @param {Object} options - Formatting options
+ * @param {boolean} options.includeFileContents - Whether to include full file contents (default: true)
  * @param {Array} selectedPrompts - Array of selected prompt contents
  * @returns {string} - Formatted content for clipboard
  */
-async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, selectedPrompts = []) {
+async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, options = {}, selectedPrompts = []) {
+  // Set default options
+  const includeFileContents = options.includeFileContents !== undefined ? options.includeFileContents : true;
   let result = '';
 
   // Add directory tree
@@ -285,29 +289,44 @@ async function formatGraphForLLM(selectedFiles, directoryTree, codeGraph, select
   // Add horizontal rule as separator
   result += '---\n\n';
 
-  // Add file contents
-  result += '# Selected Files\n\n';
+  // Add file contents if requested
+  if (includeFileContents) {
+    result += '# Selected Files\n\n';
 
-  for (const file of selectedFiles) {
-    const content = await fileSystem.readFileContent(file.path);
-    const extension = path.extname(file.path).substring(1); // Remove the dot
+    for (const file of selectedFiles) {
+      const content = await fileSystem.readFileContent(file.path);
+      const extension = path.extname(file.path).substring(1); // Remove the dot
 
-    // Add file path as heading
-    result += `## ${file.path}\n\n`;
+      // Add file path as heading
+      result += `## ${file.path}\n\n`;
 
-    // Add file content in fenced code block with language
-    result += '```' + (extension || '') + '\n';
-    result += content;
+      // Add file content in fenced code block with language
+      result += '```' + (extension || '') + '\n';
+      result += content;
 
-    // Ensure the code block ends with a newline
-    if (!content.endsWith('\n')) {
-      result += '\n';
+      // Ensure the code block ends with a newline
+      if (!content.endsWith('\n')) {
+        result += '\n';
+      }
+
+      result += '```\n\n';
+
+      // Add horizontal rule as separator between files
+      result += '---\n\n';
+    }
+  } else {
+    // Add a note about file contents being excluded for token efficiency
+    result += '# Note on Selected Files\n\n';
+    result += 'Full file contents have been excluded to optimize token usage. ';
+    result += 'This Graph Mode view focuses on structural information and relationships only.\n\n';
+
+    // List the selected files without their contents
+    result += '## Selected Files (Structure Only)\n\n';
+    for (const file of selectedFiles) {
+      result += `- ${file.path}\n`;
     }
 
-    result += '```\n\n';
-
-    // Add horizontal rule as separator between files
-    result += '---\n\n';
+    result += '\n---\n\n';
   }
 
   // Add selected prompts if any exist
